@@ -1,2 +1,2 @@
-# FOmega
+# Omega
 System F Omega Calculus
