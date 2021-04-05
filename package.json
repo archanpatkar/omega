@@ -1,0 +1,23 @@
+{
+  "name": "omega",
+  "version": "0.0.1",
+  "description": "System F Omega Lambda Calculus",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/archanpatkar/omega.git"
+  },
+  "author": "Archan Patkar",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/archanpatkar/omega/issues"
+  },
+  "homepage": "https://github.com/archanpatkar/omega#readme",
+  "dependencies": {
+    "saman": "^0.0.3",
+    "styp": "^0.0.2"
+  }
+}

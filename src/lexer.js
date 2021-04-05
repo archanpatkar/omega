@@ -6,7 +6,7 @@ const symbols = [
 const types = ["number", "bool", "unit"];
 const keywords = [
     "if", "else", "then", "true", "false", 
-    "let", "not", "and", "or", "in"
+    "let", "not", "and", "or", "in", "type"
 ];
 
 const token_name = new Map();
