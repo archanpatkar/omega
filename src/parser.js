@@ -223,6 +223,10 @@ const handlers = {
             this.expect("DEFT","Expected ':'");
             const type = this.type(":");
             this.expect("BODY","Expected '.'");
+            if(type === "*") {
+                const body = this.type(".");
+                return Expr.TCons(param,body);
+            }
             const body = this.expression(0);
             return Expr.Lam(param.name,type,body);
         },
@@ -304,6 +308,7 @@ class Parser {
         let t;
         let curr = this.peek();
         if(curr.type === "RPAREN") return;
+        if(curr.type === "MUL") return "*";
         if(curr.type === "LPAREN") {
             this.consume();
             t = this.type("(");
