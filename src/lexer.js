@@ -17,6 +17,7 @@ token_name.set("]", "RBR");
 token_name.set("\\", "LAM");
 token_name.set(".", "BODY");
 token_name.set(":", "DEFT");
+token_name.set("::", "DEFK");
 token_name.set("+", "ADD");
 token_name.set("-", "SUB");
 token_name.set("*", "MUL");
@@ -74,6 +75,10 @@ function tokenize(string) {
             curr++;
             if (ch == "-") {
                 if (string[curr] == ">") ch += string[curr++];
+                tokens.push(token(token_name.get(ch), ch));
+            }
+            else if(ch == ":") {
+                if (string[curr] == ":") ch += string[curr++];
                 tokens.push(token(token_name.get(ch), ch));
             }
             else tokens.push(token(token_name.get(ch), ch));

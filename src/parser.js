@@ -220,7 +220,9 @@ const handlers = {
         nud() {
             const param = this.expression(0);
             if(!Expr.Var.is(param)) this.expect(null,"Expected an identifier");
-            this.expect("DEFT","Expected ':'");
+            const tok = this.peek().type;
+            if(tok.type !== "DEFT" || tok.type !== "DEFK")
+                this.expect("DEFT","Expected ':' or '::'");
             const type = this.type(":");
             this.expect("BODY","Expected '.'");
             const body = this.expression(0);
