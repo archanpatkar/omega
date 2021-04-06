@@ -324,7 +324,6 @@ class Parser {
     }
 
     typePre(curr) {
-        console.log(curr);
         if(curr.type === "MUL") return this.consume().value;
         if(curr.type === "IDEN" || curr.type === "TYPE") return this.consume().value;
         if(curr.type === "LPAREN") {
@@ -365,11 +364,10 @@ class Parser {
             token = this.peek();
         }
         token = this.peek();
-        while(!not.includes(token.type) && !ops.includes(token.type) && token.value !== 0) {
+        while(!def && !not.includes(token.type) && !ops.includes(token.type) && token.value !== 0) {
             t = multiThis(handlers["APPLY"].led,handlers["APPLY"],this)(t,true);
             token = this.peek();
         }
-        console.log(t);
         if(!t) this.expect("TYPE",`Expected kind, type or variable after '${after}'`);
         return t;
     }
@@ -413,12 +411,11 @@ class Parser {
     }
 }
 
-const p1 = new Parser();
-console.log(p1.parse("\\x:number. x").toString());
-console.log(p1.parse("\\x::*. x -> x").toString());
+// const p1 = new Parser();
+// console.log(p1.parse("\\x:number. x").toString());
+// console.log(p1.parse("\\x::*. x -> x").toString());
 // console.log(p1.parse("\\x::*=>*. x number").toString());
-console.log(p1.parse("let Pair = \\x::*. \\y::*. @o. (x -> y -> r) -> r").toString());
-console.log(p1.parse("?a::*. ?b::*. \\x:a. \\y:b. ?r. \\f:t1->t2->r. f x y").toString());
-console.log(p1.parse("let fst = (?t1. ?t2. \\x: (Pair t1 t2). x [t1] (\\e1:t1. \\e2:t2. e1))").toString());
-
+// console.log(p1.parse("let Pair = \\x::*. \\y::*. @o. (x -> y -> r) -> r").toString());
+// console.log(p1.parse("?a::*. ?b::*. \\x:a. \\y:b. ?r. \\f:t1->t2->r. f x y").toString());
+// console.log(p1.parse("let fst = (?t1. ?t2. \\x: (Pair t1 t2). x [t1] (\\e1:t1. \\e2:t2. e1))").toString());
 module.exports = Parser;
