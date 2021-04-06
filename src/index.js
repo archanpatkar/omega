@@ -6,18 +6,20 @@ const machine = new Interpreter();
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
-  prompt: 'sysf> '
+  prompt: 'omeg> '
 });
 
 console.log(
 `
-..%%%%...%%..%%...%%%%...%%%%%%..%%%%%%..%%...%%..%%%%%%.
-.%%.......%%%%...%%........%%....%%......%%%.%%%..%%.....
-..%%%%.....%%.....%%%%.....%%....%%%%....%%.%.%%..%%%%...
-.....%%....%%........%%....%%....%%......%%...%%..%%.....
-..%%%%.....%%.....%%%%.....%%....%%%%%%..%%...%%..%%.....   
+O))))))))            
+O))                  
+O))      O))     O)))
+O))))))   O))  )  O))
+O))       O)) O)  O))
+O))       O) O) O)O))
+O))      O)))    O)))                
 `)
-console.log("sysf (System F - Polymorphic Lambda Calculus) 0.0.1");
+console.log("omega (System F Omega - Higher-Order Polymorphic Lambda Calculus) 0.0.1");
 console.log("");
 
 rl.prompt();

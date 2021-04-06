@@ -7,7 +7,6 @@ const Expr = sum("Expr", {
     Lit: ["type", "val"],
     TLam: ["param", "body"],
     TCons: ["var","body"],
-    TCApp: ["et1","et2"],
     Lam: ["param", "type", "body"],
     Cond: ["cond", "e1", "e2"],
     Let: ["name","e1","e2"],
