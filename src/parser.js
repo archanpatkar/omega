@@ -4,7 +4,7 @@ const tokenize = require("./lexer");
 const { Expr } = require("./ast");
 
 const ops = ["ADD", "SUB", "DIV", "MUL", "LBR", "AND", "OR", "GT", "LT", "EQ", "NEG", "NOT"];
-const not = ["EOF", "DEFT", "DOT", "RPAREN", "BODY", "IN", "THEN", "ELSE", "COMMA"];
+const not = ["EOF", "DEFT", "DEFK", "DOT", "RBR", "RPAREN", "BODY", "IN", "THEN", "ELSE", "COMMA"];
 
 // Prec table
 // or - 1
@@ -220,17 +220,26 @@ const handlers = {
         nud() {
             const param = this.expression(0);
             if(!Expr.Var.is(param)) this.expect(null,"Expected an identifier");
-            const tok = this.peek().type;
-            if(tok.type !== "DEFT" || tok.type !== "DEFK")
-                this.expect("DEFT","Expected ':' or '::'");
-            const type = this.type(":");
-            this.expect("BODY","Expected '.'");
-            if(type === "*") {
-                const body = this.type(".");
-                return Expr.TCons(param,body);
+            const tok = this.peek();
+            if(tok.type === "DEFT") {
+                this.consume();
+                const type = this.type(":");
+                this.expect("BODY","Expected '.'");
+                const body = this.expression(0);
+                return Expr.Lam(param.name,type,body);
             }
-            const body = this.expression(0);
-            return Expr.Lam(param.name,type,body);
+            if(tok.type === "DEFK") {
+                this.consume();
+                const kind = this.type("::");
+                this.expect("BODY","Expected '.'");
+                const body = this.type(".");
+                return Expr.TCons(param,kind,body);
+            }
+            this.expect("DEFT","Expected ':' or '::'");
+            // const type = this.type(":");
+            // this.expect("BODY","Expected '.'");
+            // const body = this.expression(0);
+            // return Expr.Lam(param.name,type,body);
         },
         led() {
             expect(null,"'\\' is not a binary operator");
@@ -239,11 +248,15 @@ const handlers = {
     "TYPELAM": {
         nud() {
             const param = this.expression(0);
+            let kind = "*";
             if(!Expr.Var.is(param)) this.expect(null,"Expected an identifier");
+            if(this.peek().type === "DEFK") {
+                this.consume();
+                kind = this.type("::");
+            }
             this.expect("BODY","Expected '.'");
             const body = this.expression(0);
-            const node = Expr.TLam(param.name,body);
-            return node;
+            return Expr.TLam(param.name, kind, body);;
         },
         led() {
             expect(null,"'?' is not a binary operator");
@@ -263,6 +276,10 @@ const handlers = {
     "APPLY": {
         lbp:9,
         led(left) {
+            if(arguments[1]) {
+                const right = this.type("",left);
+                return Expr.TCApp(left,right);
+            }
             const right = this.expression(this.lbp);
             return Expr.App(left,right);
         }
@@ -306,31 +323,55 @@ class Parser {
         return this.tokens[0];
     }
 
-    type(after) {
-        let t;
-        let curr = this.peek();
-        if(curr.type === "RPAREN") return;
-        if(curr.type === "MUL") return "*";
+    typePre(curr) {
+        console.log(curr);
+        if(curr.type === "MUL") return this.consume().value;
+        if(curr.type === "IDEN" || curr.type === "TYPE") return this.consume().value;
         if(curr.type === "LPAREN") {
             this.consume();
-            t = this.type("(");
+            const t = this.type("(");
             this.expect("RPAREN","Mismatched '(' in type");
+            return t;
         }
         if(curr.type === "FORALL") {
             this.consume();
             const v = this.expect("IDEN","Expected a variable").value;
+            let kind = "*";
+            if(this.peek().type === "DEFK") {
+                this.consume();
+                kind = this.type("::");
+            }
             this.expect("BODY","Expected '.'");
-            t = this.type(".");
-            return { var:v, type:t };
+            const t = this.type(".");
+            return { var:v, kind:kind, type:t };
         }
-        else if(curr.type === "IDEN" || curr.type === "TYPE") t = this.consume().value;
-        if(this.peek().type == "TO") {
+        if(curr.type === "LAM") {
             this.consume();
-            let t2 = this.type("->");
-            return [t,t2];
+            const node = multiThis(handlers["LAM"].nud,handlers["LAM"],this)();
+            if(!Expr.TCons.is(node)) this.expect(null,"Can only use types or type operators")
+            return node;
         }
-        if(t) return t;
-        this.expect("TYPE",`Expected type or variable after '${after}'`);
+        this.expect("TYPE",`Expected kind, type or variable'`);
+    }
+
+    type(after,def=null) {
+        let t = def;
+        let token = this.peek();
+        t = this.typePre(token);
+        token = this.peek();
+        while(token.type === "TO") {
+            this.consume();
+            t = [t,this.typePre(this.peek())];
+            token = this.peek();
+        }
+        token = this.peek();
+        while(!not.includes(token.type) && !ops.includes(token.type) && token.value !== 0) {
+            t = multiThis(handlers["APPLY"].led,handlers["APPLY"],this)(t,true);
+            token = this.peek();
+        }
+        console.log(t);
+        if(!t) this.expect("TYPE",`Expected kind, type or variable after '${after}'`);
+        return t;
     }
 
     expect(next, msg) {
@@ -364,11 +405,20 @@ class Parser {
 
     parse(str) {
         this.tokens = tokenize(str);
+        console.log(this.tokens);
         const e = this.expression(0);
         const token = this.peek();
         if(token.value !== 0 && not.includes(token.type)) this.expect(null,`Unexpected keyword ${token.value}`)
         return e;
     }
 }
+
+const p1 = new Parser();
+console.log(p1.parse("\\x:number. x").toString());
+console.log(p1.parse("\\x::*. x -> x").toString());
+// console.log(p1.parse("\\x::*=>*. x number").toString());
+console.log(p1.parse("let Pair = \\x::*. \\y::*. @o. (x -> y -> r) -> r").toString());
+console.log(p1.parse("?a::*. ?b::*. \\x:a. \\y:b. ?r. \\f:t1->t2->r. f x y").toString());
+console.log(p1.parse("let fst = (?t1. ?t2. \\x: (Pair t1 t2). x [t1] (\\e1:t1. \\e2:t2. e1))").toString());
 
 module.exports = Parser;
