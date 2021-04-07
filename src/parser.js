@@ -358,7 +358,7 @@ class Parser {
         let token = this.peek();
         t = this.typePre(token);
         token = this.peek();
-        while(token.type === "TO") {
+        while(token.type === "TO" || token.type === "KITO") {
             this.consume();
             t = [t,this.typePre(this.peek())];
             token = this.peek();

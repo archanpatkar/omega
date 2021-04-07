@@ -1,12 +1,12 @@
 const symbols = [
-    "(", ")", "\\", ".", "+", "-", "&", "=", "[", "]",
-    "<", ">", "=", "/", "*", "->",":", "?",",","$", "@","::"
+    "(", ")", "\\", ".", "+", "-", "&", "=", "[", "]","<", ">", 
+    "=", "/", "*", "->",":", "?",",","$", "@","::","=>","#","|"
 ];
 
 const types = ["number", "bool", "unit"];
 const keywords = [
-    "if", "else", "then", "true", "false", 
-    "let", "not", "and", "or", "in", "type"
+    "if", "else", "then", "true", "false", "let", "not", "and", 
+    "or", "in", "type", "case", "of", "inl", "inr", 
 ];
 
 const token_name = new Map();
@@ -23,6 +23,7 @@ token_name.set("-", "SUB");
 token_name.set("*", "MUL");
 token_name.set("/", "DIV");
 token_name.set("->", "TO");
+token_name.set("=>", "KITO");
 token_name.set(">", "GT");
 token_name.set("<", "LT");
 token_name.set("=", "EQ");
@@ -74,6 +75,10 @@ function tokenize(string) {
         else if (symbols.includes(ch)) {
             curr++;
             if (ch == "-") {
+                if (string[curr] == ">") ch += string[curr++];
+                tokens.push(token(token_name.get(ch), ch));
+            }
+            if (ch == "=") {
                 if (string[curr] == ">") ch += string[curr++];
                 tokens.push(token(token_name.get(ch), ch));
             }

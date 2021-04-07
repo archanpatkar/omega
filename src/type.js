@@ -18,7 +18,7 @@ const Type = sum("Types", {
 });
 
 const Kind = sum("Kind", {
-    star:["type"],
+    Star:["type"],
     KArr:["k1","k2"]
 });
 
