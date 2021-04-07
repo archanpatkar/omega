@@ -58,6 +58,10 @@ function convertType(type) {
     if(typeof type === "object") return Type.Forall([Type.TVar(type.var)],convertType(type.type));
 }
 
+function convertKind(kind) {
+    
+}
+
 function printType(type,level=0) {
     return type.cata({
         TCon: ({ name }) => name,
