@@ -62,7 +62,7 @@ function printType(type,level=0) {
     return type.cata({
         TCon: ({ name }) => name,
         TVar: ({ v }) => v,
-        TArr: ({ t1, t2 }) => `${level%3?"(":""}${printType(t1,level+1)} -> ${printType(t2,level+1)}${level%3?")":""}`,
+        TArr: ({ t1, t2 }) => `${level?"(":""}${printType(t1,level+1)} -> ${printType(t2,level+1)}${level?")":""}`,
         Forall: f => f.var.length?`forall ${f.var.map(e => printType(e)).join(" ")}. ${printType(f.type)}`: printType(f.type)
     });
 }

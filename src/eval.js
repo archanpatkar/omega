@@ -143,7 +143,11 @@ class Interpreter {
         this.checker = new TypeChecker();
         this.mode = call_by_value;
         this.global = global?global:GLOBAL;
-        Prelude.forEach(f => this.evaluate(f));
+        console.log("--:: Prelude ::--");
+        Prelude.forEach(f => {
+            console.log(f);
+            this.evaluate(f);
+        });
     }
 
     setMode(mode) {
@@ -193,10 +197,6 @@ class Interpreter {
             UnOp: ({ op, v }) => opfuns[op](this.ieval(v,env))
         });
     }
-
-    // erase(ast) {
-        // Write code to erase the types/type lams and type apps from the ast
-    // }
 
     evaluate(str) {
         const ast = this.parser.parse(str);

@@ -236,10 +236,6 @@ const handlers = {
                 return Expr.TCons(param,kind,body);
             }
             this.expect("DEFT","Expected ':' or '::'");
-            // const type = this.type(":");
-            // this.expect("BODY","Expected '.'");
-            // const body = this.expression(0);
-            // return Expr.Lam(param.name,type,body);
         },
         led() {
             expect(null,"'\\' is not a binary operator");
@@ -256,7 +252,8 @@ const handlers = {
             }
             this.expect("BODY","Expected '.'");
             const body = this.expression(0);
-            return Expr.TLam(param.name, kind, body);;
+            const node = Expr.TLam(param.name, kind, body);
+            return node;
         },
         led() {
             expect(null,"'?' is not a binary operator");
@@ -360,7 +357,7 @@ class Parser {
         token = this.peek();
         while(token.type === "TO" || token.type === "KITO") {
             this.consume();
-            t = [t,this.typePre(this.peek())];
+            t = [t,this.type("")];
             token = this.peek();
         }
         token = this.peek();
@@ -403,7 +400,6 @@ class Parser {
 
     parse(str) {
         this.tokens = tokenize(str);
-        console.log(this.tokens);
         const e = this.expression(0);
         const token = this.peek();
         if(token.value !== 0 && not.includes(token.type)) this.expect(null,`Unexpected keyword ${token.value}`)

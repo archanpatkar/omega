@@ -5,9 +5,10 @@ const symbols = [
 
 const types = ["number", "bool", "unit"];
 const keywords = [
-    "if", "else", "then", "true", "false", "let", "not", "and", 
-    "or", "in", "type", "case", "of", "inl", "inr", 
+    "if", "else", "then", "true", "false", "let", "not", "and", "or"  
 ];
+// for sum types
+// "in", "type", "case", "of", "inl", "inr",
 
 const token_name = new Map();
 token_name.set("(", "LPAREN");
@@ -78,7 +79,7 @@ function tokenize(string) {
                 if (string[curr] == ">") ch += string[curr++];
                 tokens.push(token(token_name.get(ch), ch));
             }
-            if (ch == "=") {
+            else if (ch == "=") {
                 if (string[curr] == ">") ch += string[curr++];
                 tokens.push(token(token_name.get(ch), ch));
             }
