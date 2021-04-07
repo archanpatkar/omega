@@ -156,6 +156,8 @@ class Interpreter {
 
     ieval(ast, env) {
         return ast.cata({
+            TCons: t => t.toString(),
+            TCApp: t => t.toString(),
             TLam: t => this.ieval(t.body,env),
             TApp: ta => this.ieval(ta.tl,env),
             Lit: ({ val }) => val,
@@ -200,6 +202,7 @@ class Interpreter {
 
     evaluate(str) {
         const ast = this.parser.parse(str);
+        console.log(ast.toString());
         const type = this.checker.prove(ast);
         let output = this.ieval(ast,this.global);
         if(Expr.is(output)) output = `<Tlambda>`

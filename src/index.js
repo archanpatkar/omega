@@ -49,6 +49,7 @@ rl.on('line', (input) => {
         }
         catch (e) {
             console.log(`Error: ${e.message}`)
+            console.log(e.stack)
         }
     }
     rl.prompt();

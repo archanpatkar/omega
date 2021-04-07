@@ -59,7 +59,8 @@ function convertType(type) {
 }
 
 function convertKind(kind) {
-    
+    if(kind === "*") return Kind.Star(kind)
+    if(Array.isArray(kind)) return Kind.KArr(convertKind(kind[0]),convertKind(kind[1]));
 }
 
 function printType(type,level=0) {
@@ -155,7 +156,7 @@ class TypeChecker {
         return equal(t1,t2);
     }
 
-    checkCond(ast,env) {
+    checkCond(ast,env,tenv) {
         const cond = this.check(ast.cond, env);
         const t1 = this.check(ast.e1, env);
         const t2 = this.check(ast.e2, env);
@@ -164,7 +165,7 @@ class TypeChecker {
         return t1;
     }
 
-    checkLet(ast,env) {
+    checkLet(ast,env,tenv) {
         const t1 = this.check(ast.e1,env);
         if(ast.e2) {
             const ne = new TypeEnv(env);
@@ -175,7 +176,7 @@ class TypeChecker {
         return t1;
     }
 
-    checkTLam(ast,env) {
+    checkTLam(ast,env,tenv) {
         const tv = convertType(ast.param);
         if(!this.verifyType(tv)) notAType(tv);
         this.tenv.addBinding(tv.v, true);
@@ -184,7 +185,7 @@ class TypeChecker {
         return Type.Forall([tv],body);
     }
 
-    checkLam(ast,env) {
+    checkLam(ast,env,tenv) {
         const vt = convertType(ast.type);
         if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(env);
@@ -193,7 +194,7 @@ class TypeChecker {
         return Type.TArr(vt, body);
     }
 
-    checkApp(ast,env) {
+    checkApp(ast,env,tenv) {
         const t1 = this.check(ast.e1, env);
         const t2 = this.check(ast.e2, env);
         if(!Type.TArr.is(t1)) nonFunction(t1);
@@ -201,7 +202,7 @@ class TypeChecker {
         return t1.t2;
     }
 
-    checkTApp(ast,env) {
+    checkTApp(ast,env,tenv) {
         const t1 = this.check(ast.tl, env);
         const t2 = convertType(ast.t);
         if(!this.verifyType(t2)) notAType(t2);
@@ -211,14 +212,27 @@ class TypeChecker {
         return this.rename(t1.type,map);
     }
 
-    checkUnOp(ast,env) {
+    checkTCons(ast,env,tenv) {
+        const vt = convertKind(ast.kind);
+        // if(!this.verifyType(vt)) notAType(vt);
+        const ne = new TypeEnv(tenv);
+        ne.addBinding(ast.param, vt);
+        const body = convertType(ast.body);
+        return Kind.KArr(vt, body);
+    }
+
+    checkTCApp(ast,env,tenv) {
+        
+    }
+
+    checkUnOp(ast,env,tenv) {
         const t = this.check(ast.v,env);
         const op = optypes[ast.op];
         if(!this.equalTypes(op.t1,t)) typeMismatch(op.t1,t);
         return op.t2;
     }
     
-    checkBinOp(ast,env) {
+    checkBinOp(ast,env,tenv) {
         const t1 = this.check(ast.l,env);
         const t2 = this.check(ast.r,env);
         let op = optypes[ast.op];
@@ -235,18 +249,24 @@ class TypeChecker {
         return TUnit;
     }
 
-    check(ast, env = this.env) {
+    check(ast, env = this.env, tenv = this.tenv) {
+        console.log("ast:");
+        console.log(ast);
+        if(Kind.is(ast)) return ast;
+        if(Type.is(ast)) return ast;
         return ast.cata({
             Lit: ({ type }) => PrimTypes[type],
             Var: ({ name }) => env.lookUp(name),
-            UnOp: u => this.checkUnOp(u,env),
-            BinOp: b => this.checkBinOp(b,env),
-            Cond: c => this.checkCond(c,env),
-            Lam: l => this.checkLam(l,env),
-            App: a => this.checkApp(a,env),
-            TApp: a => this.checkTApp(a,env),
-            TLam: t => this.checkTLam(t,env),
-            Let: lb => this.checkLet(lb,env)
+            UnOp: u => this.checkUnOp(u,env,tenv),
+            BinOp: b => this.checkBinOp(b,env,tenv),
+            Cond: c => this.checkCond(c,env,tenv),
+            Lam: l => this.checkLam(l,env,tenv),
+            App: a => this.checkApp(a,env,tenv),
+            TApp: a => this.checkTApp(a,env,tenv),
+            TLam: t => this.checkTLam(t,env,tenv),
+            TCons: cn => this.checkTCons(cn,env,tenv),
+            TCApp: tc => this.checkTCApp(tc,env,tenv),
+            Let: lb => this.checkLet(lb,env,tenv)
         });
     }
 
