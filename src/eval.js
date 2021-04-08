@@ -202,11 +202,14 @@ class Interpreter {
 
     evaluate(str) {
         const ast = this.parser.parse(str);
+        console.log("AST:");
         console.log(ast.toString());
         const type = this.checker.prove(ast);
-        let output = this.ieval(ast,this.global);
-        if(Expr.is(output)) output = `<Tlambda>`
-        return { output, type };
+        console.log("Type:");
+        console.log(type);
+        // let output = this.ieval(ast,this.global);
+        // if(Expr.is(output)) output = `<Tlambda>`
+        return { output:"", type:"" };
     }
 }
 

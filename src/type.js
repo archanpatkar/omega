@@ -8,6 +8,11 @@
 // Dep
 const { equal } = require("saman");
 const { sum, tagged } = require("styp");
+const { Expr } = require("./ast");
+
+// Renamed vars prefix
+let gcount = 0;
+const globalPrefix = _ => `_tlam_v_${gcount++}`;
 
 // Type Defs
 const Type = sum("Types", {
@@ -64,6 +69,12 @@ function convertKind(kind) {
 }
 
 function printType(type,level=0) {
+    if(Kind.is(type)) {
+        return type.cata({
+            Star: _ => "*",
+            KArr: ({k1, k2}) => `${printType(k1)} => ${printType(k2)}`
+        });
+    }
     return type.cata({
         TCon: ({ name }) => name,
         TVar: ({ v }) => v,
@@ -124,10 +135,10 @@ class TypeChecker {
         }
     }
 
-    fresh() {
+    fresh(prefix="") {
         const pair = this.names[this.count++ % 25];
         let n = pair[1]++;
-        return Type.TVar(`${pair[0]}${n?n:""}`);
+        return Type.TVar(`${prefix}${pair[0]}${n?n:""}`);
     }
 
     rename(type,map) {
@@ -214,10 +225,12 @@ class TypeChecker {
 
     checkTCons(ast,env,tenv) {
         const vt = convertKind(ast.kind);
-        // if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(tenv);
         ne.addBinding(ast.param, vt);
-        const body = convertType(ast.body);
+        let body;
+        if(Expr.is(ast.body)) body = this.check(ast.body,env,ne);
+        else body = convertType(ast.body);
+        if(Type.is(body)) body = convertKind("*");
         return Kind.KArr(vt, body);
     }
 
@@ -226,7 +239,7 @@ class TypeChecker {
     }
 
     checkUnOp(ast,env,tenv) {
-        const t = this.check(ast.v,env);
+        const t = this.check(ast.v,env,tenv);
         const op = optypes[ast.op];
         if(!this.equalTypes(op.t1,t)) typeMismatch(op.t1,t);
         return op.t2;
@@ -250,7 +263,7 @@ class TypeChecker {
     }
 
     check(ast, env = this.env, tenv = this.tenv) {
-        console.log("ast:");
+        console.log("check--")
         console.log(ast);
         if(Kind.is(ast)) return ast;
         if(Type.is(ast)) return ast;
@@ -271,7 +284,9 @@ class TypeChecker {
     }
 
     prove(ast) {
-        return printType(this.check(ast))
+        // console.log(ast)
+        // 
+        return printType(this.check(ast));
     }
 }
 
