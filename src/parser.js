@@ -322,7 +322,8 @@ class Parser {
 
     typePre(curr) {
         if(curr.type === "MUL") return this.consume().value;
-        if(curr.type === "IDEN" || curr.type === "TYPE") return this.consume().value;
+        if(curr.type === "TYPE") return this.consume().value;
+        if(curr.type === "IDEN") return Expr.Var(this.consume().value);
         if(curr.type === "LPAREN") {
             this.consume();
             const t = this.type("(");

@@ -58,13 +58,14 @@ function convertType(type) {
     if(type === "number") return TNumber;
     if(type === "bool") return TBool;
     if(type === "unit") return TUnit;
-    if(typeof type === "string") return Type.TVar(type);
+    if(typeof type === "string" || Expr.Var.is(type)) return Type.TVar(type);
     if(Array.isArray(type)) return Type.TArr(convertType(type[0]),convertType(type[1]));
     if(typeof type === "object") return Type.Forall([Type.TVar(type.var)],convertType(type.type));
+    return type;
 }
 
 function convertKind(kind) {
-    if(kind === "*") return Kind.Star(kind)
+    if(kind === "*" || Type.is(kind)) return Kind.Star("*");
     if(Array.isArray(kind)) return Kind.KArr(convertKind(kind[0]),convertKind(kind[1]));
 }
 
@@ -167,6 +168,47 @@ class TypeChecker {
         return equal(t1,t2);
     }
 
+    // currently ignores variable shadowing!
+    // \x:int. \x:bool. x
+    subst(ast,map={}) {
+        console.log("Substitution starts here -->");
+        console.log(ast);
+        console.log(map)
+        if(Expr.TCons.is(ast)) return ast;
+        if(Type.TVar.is(ast)) return ast.v in map?map[ast.v]:null;
+        // if(Expr.TCons.is(ast)) {
+            // if(equal(ast.var,ast.body.var)); // will handle later 
+            // return this.subst(ast.body,map);
+        // }
+        if(Expr.TCApp.is(ast)); // later
+        return this.rename(convertType(ast.body),map);
+    }
+
+
+    handleTypes(type,tenv) {
+        console.log("Handle types starts here -->");
+        console.log(type);
+        if(Expr.TCons.is(type)) return Expr.TCons(type.var,type.kind,this.handleTypes(type.body,tenv));
+            // const t = this.check(type);
+        if(Expr.TCApp.is(type)) {
+            const t = this.check(type);
+            const to1 = this.handleTypes(type.to1,tenv);
+            console.log(`hto1: ${to1}`)
+            const to2 = this.handleTypes(type.to2,tenv);
+            console.log(`hto2: ${to2}`)
+            if(Expr.Var.is(to1)); // later
+            else if(Expr.TCons.is(to1)) {
+                const map = {}
+                map[to1.var] = to2
+                const out = this.subst(to1.body,map);
+                console.log("out type:")
+                console.log(out);
+                return out
+            }
+        }
+        return convertType(type);
+    }
+
     checkCond(ast,env,tenv) {
         const cond = this.check(ast.cond, env);
         const t1 = this.check(ast.e1, env);
@@ -188,7 +230,7 @@ class TypeChecker {
     }
 
     checkTLam(ast,env,tenv) {
-        const tv = convertType(ast.param);
+        const tv = this.handleTypes(ast.param);
         if(!this.verifyType(tv)) notAType(tv);
         this.tenv.addBinding(tv.v, true);
         const body = this.check(ast.body, env);
@@ -197,7 +239,7 @@ class TypeChecker {
     }
 
     checkLam(ast,env,tenv) {
-        const vt = convertType(ast.type);
+        const vt = this.handleTypes(ast.type);
         if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(env);
         ne.addBinding(ast.param, vt);
@@ -215,7 +257,7 @@ class TypeChecker {
 
     checkTApp(ast,env,tenv) {
         const t1 = this.check(ast.tl, env);
-        const t2 = convertType(ast.t);
+        const t2 = this.handleTypes(ast.t);
         if(!this.verifyType(t2)) notAType(t2);
         if(!Type.Forall.is(t1)) nonGenFunction(t1);
         const map = {}
@@ -235,7 +277,19 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
-        
+        console.log("Inside TCApp");
+        console.log();
+        const t1 = this.check(ast.to1, env, tenv);
+        let t2;
+        if(Expr.is(ast.to2)) t2 = this.check(ast.to2, env, tenv);
+        else t2 = convertKind(convertType(ast.to2));
+        if(!Kind.KArr.is(t1)) nonFunction(t1);
+        console.log("type1");
+        console.log(t1.toString());
+        console.log("type2");
+        console.log(t2.toString());
+        if(!equal(t1.k1,t2)) typeMismatch(t1.k1,t2);
+        return t1.k2;
     }
 
     checkUnOp(ast,env,tenv) {
@@ -290,4 +344,16 @@ class TypeChecker {
     }
 }
 
+const tc1 = new TypeChecker();
+
+const ex1 = Expr.Lam("y",Expr.TCApp(Expr.TCons("x","*","x"),"number"),Expr.Var("y"));
+const ex2 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*","x")),"number"),"bool"),Expr.Var("y"));
+console.log(printType(tc1.check(ex1)));
+console.log(printType(tc1.check(ex2)));
+
+// test examples
+// \x::*. \y::*. x -> y
+// \x::*. \y::*. x
+// \x::*. \y::*. x y
+// \x::*. \y::*. @r. x -> y -> r
 module.exports = { TypeChecker, PrimTypes };
