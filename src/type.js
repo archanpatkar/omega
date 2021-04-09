@@ -5,6 +5,7 @@
 // https://crypto.stanford.edu/~blynn/lambda/systemf.html
 
 // TODO: Improve and optimize
+// the code is in a bit of a mess will restructure the whole thing
 // Dep
 const { equal } = require("saman");
 const { sum, tagged } = require("styp");
@@ -26,6 +27,8 @@ const Kind = sum("Kind", {
     Star:["type"],
     KArr:["k1","k2"]
 });
+
+const TClosure = tagged("TClosure",["env","to"]);
 
 const TNumber = Type.TCon("number");
 const TBool = Type.TCon("bool");
@@ -55,13 +58,13 @@ const optypes = {
 }
 
 function convertType(type) {
+    if(Type.is(type)) return type;
     if(type === "number") return TNumber;
     if(type === "bool") return TBool;
     if(type === "unit") return TUnit;
     if(typeof type === "string" || Expr.Var.is(type)) return Type.TVar(type);
     if(Array.isArray(type)) return Type.TArr(convertType(type[0]),convertType(type[1]));
     if(typeof type === "object") return Type.Forall([Type.TVar(type.var)],convertType(type.type));
-    return type;
 }
 
 function convertKind(kind) {
@@ -80,7 +83,7 @@ function printType(type,level=0) {
         TCon: ({ name }) => name,
         TVar: ({ v }) => v,
         TArr: ({ t1, t2 }) => `${level?"(":""}${printType(t1,level+1)} -> ${printType(t2,level+1)}${level?")":""}`,
-        Forall: f => f.var.length?`forall ${f.var.map(e => printType(e)).join(" ")}. ${printType(f.type)}`: printType(f.type)
+        Forall: f => f.var.length?`forall ${f.var.map(e => printType(e,level+1)).join(" ")}. ${printType(f.type,level+1)}`: printType(f.type,level+1)
     });
 }
 
@@ -143,6 +146,8 @@ class TypeChecker {
     }
 
     rename(type,map) {
+        // console.log("inside rename")
+        // console.log(type?type.toString():"undef");
         return type.cata({
             TCon: t => t,
             TVar: ({ v }) => v in map? map[v]:Type.TVar(v),
@@ -171,38 +176,56 @@ class TypeChecker {
     // currently ignores variable shadowing!
     // \x:int. \x:bool. x
     subst(ast,map={}) {
-        console.log("Substitution starts here -->");
-        console.log(ast);
-        console.log(map)
-        if(Expr.TCons.is(ast)) return ast;
-        if(Type.TVar.is(ast)) return ast.v in map?map[ast.v]:null;
-        // if(Expr.TCons.is(ast)) {
-            // if(equal(ast.var,ast.body.var)); // will handle later 
-            // return this.subst(ast.body,map);
-        // }
-        if(Expr.TCApp.is(ast)); // later
-        return this.rename(convertType(ast.body),map);
+        // console.log("Substitution starts here -->");
+        // console.log(ast.toString());
+        // console.log(map)
+        if(TClosure.is(ast)) {
+            if(ast.var in map) {
+                let temp = {}
+                let name = globalPrefix();
+                temp[ast.var] = Type.TVar(name)
+                return Expr.TCons(name,ast.kind,this.subst(ast.body, temp));
+            }
+            return ast;
+        } 
+        if(Expr.TCApp.is(ast)) {
+            return Expr.TCApp(
+                this.subst(ast.to1,map),
+                this.subst(ast.to2,map)
+            );
+        }
+        const ct = convertType(ast);
+        // console.log("converted")
+        // console.log(ct)
+        return this.rename(ct,map);
     }
 
 
-    handleTypes(type,tenv) {
-        console.log("Handle types starts here -->");
-        console.log(type);
-        if(Expr.TCons.is(type)) return Expr.TCons(type.var,type.kind,this.handleTypes(type.body,tenv));
+    handleTypes(type,tenv=this.tenv.env) {
+        // console.log("Handle types starts here -->");
+        // console.log(type);
+        if(Expr.TCons.is(type)) {
+            let env = {__proto__:tenv};
+            let func = TClosure(env,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env)));
+            // console.log("closure function");
+            // console.log(func);
+            return func;
+        }
             // const t = this.check(type);
         if(Expr.TCApp.is(type)) {
             const t = this.check(type);
             const to1 = this.handleTypes(type.to1,tenv);
-            console.log(`hto1: ${to1}`)
+            // console.log(`hto1: ${to1}`)
             const to2 = this.handleTypes(type.to2,tenv);
-            console.log(`hto2: ${to2}`)
+            // console.log(`hto2: ${to2}`)
             if(Expr.Var.is(to1)); // later
-            else if(Expr.TCons.is(to1)) {
-                const map = {}
-                map[to1.var] = to2
-                const out = this.subst(to1.body,map);
-                console.log("out type:")
-                console.log(out);
+            // Expr.TCons.is(to1)
+            else if(TClosure.is(to1)) {
+                // const map = { __proto__:to1.env }
+                to1.env[to1.to.var] = to2
+                const out = this.subst(to1.to.body,to1.env);
+                // console.log("out type:")
+                // console.log(out);
                 return out
             }
         }
@@ -277,17 +300,16 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
-        console.log("Inside TCApp");
-        console.log();
+        // console.log("Inside TCApp");
         const t1 = this.check(ast.to1, env, tenv);
         let t2;
         if(Expr.is(ast.to2)) t2 = this.check(ast.to2, env, tenv);
         else t2 = convertKind(convertType(ast.to2));
         if(!Kind.KArr.is(t1)) nonFunction(t1);
-        console.log("type1");
-        console.log(t1.toString());
-        console.log("type2");
-        console.log(t2.toString());
+        // console.log("type1");
+        // console.log(t1.toString());
+        // console.log("type2");
+        // console.log(t2.toString());
         if(!equal(t1.k1,t2)) typeMismatch(t1.k1,t2);
         return t1.k2;
     }
@@ -317,8 +339,8 @@ class TypeChecker {
     }
 
     check(ast, env = this.env, tenv = this.tenv) {
-        console.log("check--")
-        console.log(ast);
+        // console.log("check--")
+        // console.log(ast);
         if(Kind.is(ast)) return ast;
         if(Type.is(ast)) return ast;
         return ast.cata({
@@ -338,8 +360,6 @@ class TypeChecker {
     }
 
     prove(ast) {
-        // console.log(ast)
-        // 
         return printType(this.check(ast));
     }
 }
@@ -347,9 +367,11 @@ class TypeChecker {
 const tc1 = new TypeChecker();
 
 const ex1 = Expr.Lam("y",Expr.TCApp(Expr.TCons("x","*","x"),"number"),Expr.Var("y"));
-const ex2 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*","x")),"number"),"bool"),Expr.Var("y"));
+const ex2 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*","x")),"bool"),"bool"),Expr.Var("y"));
+const ex3 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*",{var:"r",kind:"*",type:["x",["z","r"]]})),"number"),"bool"),Expr.TApp(Expr.Var("y"),"number"));
 console.log(printType(tc1.check(ex1)));
 console.log(printType(tc1.check(ex2)));
+console.log(printType(tc1.check(ex3)));
 
 // test examples
 // \x::*. \y::*. x -> y
