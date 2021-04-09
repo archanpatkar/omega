@@ -206,7 +206,7 @@ class TypeChecker {
         // console.log(type);
         console.log("Current Type Environment")
         console.log(tenv)
-        if(Expr.Var.is(type)) return this.handleTypes(tenv[type.name],tenv);
+        if(Expr.Var.is(type) && ) return this.handleTypes(tenv[type.name],tenv);
         if(Expr.TCons.is(type)) {
             let env = {__proto__:tenv};
             let func = TClosure(env,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env)));
