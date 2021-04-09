@@ -204,6 +204,9 @@ class TypeChecker {
     handleTypes(type,tenv=this.tenv.env) {
         // console.log("Handle types starts here -->");
         // console.log(type);
+        console.log("Current Type Environment")
+        console.log(tenv)
+        if(Expr.Var.is(type)) return this.handleTypes(tenv[type.name],tenv);
         if(Expr.TCons.is(type)) {
             let env = {__proto__:tenv};
             let func = TClosure(env,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env)));
@@ -214,13 +217,17 @@ class TypeChecker {
             // const t = this.check(type);
         if(Expr.TCApp.is(type)) {
             const t = this.check(type);
+            console.log("ast to1")
+            console.log(type.to1)
             const to1 = this.handleTypes(type.to1,tenv);
             // console.log(`hto1: ${to1}`)
             const to2 = this.handleTypes(type.to2,tenv);
             // console.log(`hto2: ${to2}`)
-            if(Expr.Var.is(to1)); // later
+            // if(Expr.Var.is(to1)) to1 = tenv[to1.name]; // later
             // Expr.TCons.is(to1)
-            else if(TClosure.is(to1)) {
+            console.log("TO1|---->")
+            console.log(to1)
+            if(TClosure.is(to1)) {
                 // const map = { __proto__:to1.env }
                 to1.env[to1.to.var] = to2
                 const out = this.subst(to1.to.body,to1.env);
@@ -228,6 +235,7 @@ class TypeChecker {
                 // console.log(out);
                 return out
             }
+            else genericError("Requires a Type Operator");
         }
         return convertType(type);
     }
@@ -242,7 +250,9 @@ class TypeChecker {
     }
 
     checkLet(ast,env,tenv) {
-        const t1 = this.check(ast.e1,env);
+        let t1;
+        if(Expr.TCons.is(ast) || Expr.TCApp.is(ast)) t1 = ast.e1;
+        else t1 = this.check(ast.e1,env);
         if(ast.e2) {
             const ne = new TypeEnv(env);
             ne.addBinding(ast.name, t1);
@@ -255,7 +265,7 @@ class TypeChecker {
     checkTLam(ast,env,tenv) {
         const tv = this.handleTypes(ast.param);
         if(!this.verifyType(tv)) notAType(tv);
-        this.tenv.addBinding(tv.v, true);
+        this.tenv.addBinding(tv.v, convertKind(ast.kind));
         const body = this.check(ast.body, env);
         this.tenv.removeBinding(tv.v);
         return Type.Forall([tv],body);
@@ -293,7 +303,7 @@ class TypeChecker {
         const ne = new TypeEnv(tenv);
         ne.addBinding(ast.param, vt);
         let body;
-        if(Expr.is(ast.body)) body = this.check(ast.body,env,ne);
+        if(Expr.is(ast.body)) body = this.checkHKT(ast.body,env,ne);
         else body = convertType(ast.body);
         if(Type.is(body)) body = convertKind("*");
         return Kind.KArr(vt, body);
@@ -301,9 +311,9 @@ class TypeChecker {
 
     checkTCApp(ast,env,tenv) {
         // console.log("Inside TCApp");
-        const t1 = this.check(ast.to1, env, tenv);
+        const t1 = this.checkHKT(ast.to1, env, tenv);
         let t2;
-        if(Expr.is(ast.to2)) t2 = this.check(ast.to2, env, tenv);
+        if(Expr.is(ast.to2)) t2 = this.checkHKT(ast.to2, env, tenv);
         else t2 = convertKind(convertType(ast.to2));
         if(!Kind.KArr.is(t1)) nonFunction(t1);
         // console.log("type1");
@@ -338,14 +348,23 @@ class TypeChecker {
         return TUnit;
     }
 
+    checkHKT(ast,env,tenv) {
+        if(Expr.Var.is(ast) && tenv.exists(ast.name)) return tenv.lookUp(ast.name);
+        return this.check(ast,env,tenv);
+    }
+
     check(ast, env = this.env, tenv = this.tenv) {
-        // console.log("check--")
-        // console.log(ast);
+        console.log("check--")
+        console.log(ast.toString());
         if(Kind.is(ast)) return ast;
         if(Type.is(ast)) return ast;
         return ast.cata({
             Lit: ({ type }) => PrimTypes[type],
-            Var: ({ name }) => env.lookUp(name),
+            Var: ({ name }) => {
+                const e = env.lookUp(name);
+                if(Expr.is(e)) return this.check(e,env,tenv)
+                return e;
+            },
             UnOp: u => this.checkUnOp(u,env,tenv),
             BinOp: b => this.checkBinOp(b,env,tenv),
             Cond: c => this.checkCond(c,env,tenv),
@@ -364,16 +383,23 @@ class TypeChecker {
     }
 }
 
-const tc1 = new TypeChecker();
+// const tc1 = new TypeChecker();
 
-const ex1 = Expr.Lam("y",Expr.TCApp(Expr.TCons("x","*","x"),"number"),Expr.Var("y"));
-const ex2 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*","x")),"bool"),"bool"),Expr.Var("y"));
-const ex3 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*",{var:"r",kind:"*",type:["x",["z","r"]]})),"number"),"bool"),Expr.TApp(Expr.Var("y"),"number"));
-console.log(printType(tc1.check(ex1)));
-console.log(printType(tc1.check(ex2)));
-console.log(printType(tc1.check(ex3)));
+// const ex1 = Expr.Lam("y",Expr.TCApp(Expr.TCons("x","*","x"),"number"),Expr.Var("y"));
+// const ex2 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*","x")),"bool"),"bool"),Expr.Var("y"));
+// const ex3 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*",{var:"r",kind:"*",type:["x",["z","r"]]})),"number"),"bool"),Expr.TApp(Expr.Var("y"),"number"));
+// const ex4 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("x","*","x")),"bool"),"number"),Expr.Var("y"));
+// console.log(printType(tc1.check(ex1)));
+// console.log(printType(tc1.check(ex2)));
+// console.log(printType(tc1.check(ex3)));
+// console.log(printType(tc1.check(ex4)));
 
 // test examples
+
+// let Pair = \x::*. \y::*. @r. (x -> y -> r) -> r
+// let fst = (?t1. ?t2. \x:(Pair t1 t2). x [t1] (\e1:t1. \e2:t2. e1))
+// let snd = (?t1. ?t2. \x:(Pair t1 t2). x [t2] (\e1:t1. \e2:t2. e2))
+
 // \x::*. \y::*. x -> y
 // \x::*. \y::*. x
 // \x::*. \y::*. x y
