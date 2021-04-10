@@ -5,8 +5,8 @@
 // https://crypto.stanford.edu/~blynn/lambda/typo.html
 
 // TODO: Improve and optimize
-// TODO: the current implementation of the kinding system is a bit adhoc will restructure the whole thing
-
+// TODO: the current implementation of the kinding system is a bit adhoc will restructure the whole thing,
+// and also cover all the kind check cases
 // Dep
 const { equal } = require("saman");
 const { sum, tagged } = require("styp");
@@ -22,7 +22,7 @@ const Type = sum("Types", {
     TVar: ["v"],
     TCon: ["name"],
     TArr: ["t1", "t2"],
-    Forall: ["var", "type"]
+    Forall: ["var", "kind", "type"]
 });
 
 const Kind = sum("Kind", {
@@ -54,7 +54,7 @@ const optypes = {
     "NOT": Type.TArr(TBool,TBool),
     "NEG": Type.TArr(TNumber,TNumber),
     "EQ": Type.Forall(
-        [Type.TVar("o1")],
+        [Type.TVar("o1")], Kind.Star("*"),
         Type.TArr(Type.TVar("o1"),Type.TArr(Type.TVar("o1"),TBool))
     )
 }
@@ -67,7 +67,7 @@ function convertType(type) {
     if(typeof type === "string") return Type.TVar(type);
     if(Expr.Var.is(type)) return Type.TVar(type.name);
     if(Array.isArray(type)) return Type.TArr(convertType(type[0]),convertType(type[1]));
-    if(typeof type === "object") return Type.Forall([Type.TVar(type.var)],convertType(type.type));
+    if(typeof type === "object") return Type.Forall([Type.TVar(type.var)],convertKind(type.kind),convertType(type.type));
 }
 
 function convertKind(kind) {
@@ -87,7 +87,7 @@ function printType(type,level=0) {
         TCon: ({ name }) => name,
         TVar: ({ v }) => v,
         TArr: ({ t1, t2 }) => `${level?"(":""}${printType(t1,level+1)} -> ${printType(t2,level+1)}${level?")":""}`,
-        Forall: f => f.var.length?`forall ${f.var.map(e => printType(e,level+1)).join(" ")}. ${printType(f.type,level+1)}`: printType(f.type,level+1)
+        Forall: f => f.var.length?`∀ ${f.var.map(e => printType(e,level+1)).join(" ")}::${printType(f.kind)}. ${printType(f.type,level+1)}`: printType(f.type,level+1)
     });
 }
 
@@ -154,7 +154,7 @@ class TypeChecker {
             TCon: t => t,
             TVar: ({ v }) => v in map? map[v]:Type.TVar(v),
             TArr: ({ t1, t2 }) => Type.TArr(this.rename(t1,map), this.rename(t2,map)),
-            Forall: f => Type.Forall(f.var,this.rename(f.type,map))
+            Forall: f => Type.Forall(f.var,f.kind,this.rename(f.type,map))
         });
     }
 
@@ -245,7 +245,7 @@ class TypeChecker {
         this.tenv.addBinding(tv.v, tv);
         const body = this.check(ast.body, env);
         this.tenv.removeBinding(tv.v);
-        return Type.Forall([tv],body);
+        return Type.Forall([tv],convertKind(ast.kind),body);
     }
 
     checkLam(ast,env,tenv) {
@@ -270,6 +270,11 @@ class TypeChecker {
         const t2 = this.handleTypes(ast.t,env);
         if(!this.verifyType(t2)) notAType(t2);
         if(!Type.Forall.is(t1)) nonGenFunction(t1);
+        let kt;
+        if(Expr.TCons.is(ast.t) || Expr.TCApp.is(ast.t)) kt = this.check(ast.t,env,tenv);
+        else kt = convertKind("*");
+        if(!Kind.KArr.is(kt) && !this.verifyType(t2)) notAType(t2);
+        if(!equal(t1.kind,kt)) genericError("Kinds do not match!");
         const map = {}
         map[t1.var[0].v] = t2;
         return this.rename(t1.type,map);
@@ -351,44 +356,4 @@ class TypeChecker {
     }
 }
 
-// const tc1 = new TypeChecker();
-// const ex1 = Expr.Lam("y",Expr.TCApp(Expr.TCons("x","*","x"),"number"),Expr.Var("y"));
-// const ex2 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*","x")),"bool"),"bool"),Expr.Var("y"));
-// const ex3 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("z","*",{var:"r",kind:"*",type:["x",["z","r"]]})),"number"),"bool"),Expr.TApp(Expr.Var("y"),"number"));
-// const ex4 = Expr.Lam("y",Expr.TCApp(Expr.TCApp(Expr.TCons("x","*",Expr.TCons("x","*","x")),"bool"),"number"),Expr.Var("y"));
-
-// console.log(printType(tc1.check(ex1)));
-// console.log(printType(tc1.check(ex2)));
-// console.log(printType(tc1.check(ex3)));
-// console.log(printType(tc1.check(ex4)));
-
-// Testing!
-// let Pair = \x::*. \y::*. @r. (x -> y -> r) -> r
-// let fst = (?t1. ?t2. \x:(Pair t1 t2). x [t1] (\e1:t1. \e2:t2. e1))
-// let snd = (?t1. ?t2. \x:(Pair t1 t2). x [t2] (\e1:t1. \e2:t2. e2))
-// const ex5 = Expr.Let("Pair",Expr.TCons("x","*",Expr.TCons("y","*",{var:"r",kind:"*",type:[["x",["y","r"]],"r"]})),null);
-// const ex6 = Expr.Let("fst",Expr.TLam("t1","*",Expr.TLam("t2","*",Expr.Lam("x",Expr.TCApp(Expr.TCApp(Expr.Var("Pair"),Expr.Var("t1")),Expr.Var("t2")),Expr.App(Expr.TApp(Expr.Var("x"),"t1"),Expr.Lam("x","t1",Expr.Lam("y","t2",Expr.Var("x"))))))),null);
-// const ex7 = Expr.Let("snd",Expr.TLam("t1","*",Expr.TLam("t2","*",Expr.Lam("x",Expr.TCApp(Expr.TCApp(Expr.Var("Pair"),Expr.Var("t1")),Expr.Var("t2")),Expr.App(Expr.TApp(Expr.Var("x"),"t2"),Expr.Lam("x","t1",Expr.Lam("y","t2",Expr.Var("y"))))))),null);
-// console.log(printType(tc1.check(ex6)));
-// console.log(printType(tc1.check(ex7)));
-
-// const p1 = new Parser();
-// const ex9 = p1.parse(`let pair = (?t1. ?t2. \\x:t1. \\y:t2. ?r. \\f:t1->t2->r. f x y)`)
-// const ex8 = p1.parse("let thd = (?t1. ?t2. \\x:(Pair t1 t2). x [t1] (\\e1:t1. \\e2:t2. e1))");
-// const ex10 = p1.parse("\\y:(Pair number number). y [number] (\\x:number. \\y:number. x+y)");
-
-// console.log("handmade")
-// console.log(ex6.toString());
-// console.log(ex8.toString());
-// console.log(printType(tc1.check(ex5)));
-// console.log(printType(tc1.check(ex8)));
-// console.log(printType(tc1.check(ex9)))
-// console.log(ex10.toString());
-// console.log(printType(tc1.check(ex10)));
-
-// test examples
-// \x::*. \y::*. x -> y
-// \x::*. \y::*. x
-// \x::*. \y::*. x y
-// \x::*. \y::*. @r. x -> y -> r
 module.exports = { TypeChecker, PrimTypes, printType };

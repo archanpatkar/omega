@@ -408,11 +408,4 @@ class Parser {
     }
 }
 
-// const p1 = new Parser();
-// console.log(p1.parse("\\x:number. x").toString());
-// console.log(p1.parse("\\x::*. x -> x").toString());
-// console.log(p1.parse("\\x::*=>*. x number").toString());
-// console.log(p1.parse("let Pair = \\x::*. \\y::*. @o. (x -> y -> r) -> r").toString());
-// console.log(p1.parse("?a::*. ?b::*. \\x:a. \\y:b. ?r. \\f:t1->t2->r. f x y").toString());
-// console.log(p1.parse("let fst = (?t1. ?t2. \\x: (Pair t1 t2). x [t1] (\\e1:t1. \\e2:t2. e1))").toString());
 module.exports = Parser;

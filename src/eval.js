@@ -143,9 +143,9 @@ class Interpreter {
         this.checker = new TypeChecker();
         this.mode = call_by_value;
         this.global = global?global:GLOBAL;
-        console.log("--:: Prelude ::--");
+        // console.log("--:: Prelude ::--");
         Prelude.forEach(f => {
-            console.log(f);
+            // console.log(f);  
             this.evaluate(f);
         });
     }
@@ -156,8 +156,8 @@ class Interpreter {
 
     ieval(ast, env) {
         return ast.cata({
-            TCons: t => t.toString(),
-            TCApp: t => t.toString(),
+            TCons: t => t,
+            TCApp: t => t,
             TLam: t => this.ieval(t.body,env),
             TApp: ta => this.ieval(ta.tl,env),
             Lit: ({ val }) => val,
@@ -202,14 +202,12 @@ class Interpreter {
 
     evaluate(str) {
         const ast = this.parser.parse(str);
-        // console.log("AST:");
-        // console.log(ast.toString());
         const type = this.checker.prove(ast);
-        console.log("Type:");
-        console.log(type);
-        // let output = this.ieval(ast,this.global);
-        // if(Expr.is(output)) output = `<Tlambda>`
-        return { output:"", type:"" };
+        let output = this.ieval(ast,this.global);
+        if(Expr.TLam.is(output)) output = `<Tlambda>`;
+        if(Expr.TCons.is(output)) output = `<TOperator>`;
+        if(Expr.TCApp.is(output)) output = ""
+        return { output, type };
     }
 }
 
