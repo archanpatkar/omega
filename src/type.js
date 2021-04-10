@@ -1,11 +1,12 @@
 // Type checker
 // Based on -
-// https://www.cs.cornell.edu/courses/cs4110/2018fa/lectures/lecture22.pdf
+// https://www.cs.cornell.edu/courses/cs4110/2018fa/lectures/lecture30.pdf
 // https://www.cl.cam.ac.uk/teaching/1415/L28/lambda.pdf
-// https://crypto.stanford.edu/~blynn/lambda/systemf.html
+// https://crypto.stanford.edu/~blynn/lambda/typo.html
 
 // TODO: Improve and optimize
-// the code is a bloody mess will restructure the whole thing
+// TODO: the current implementation of the kinding system is a bit adhoc will restructure the whole thing
+
 // Dep
 const { equal } = require("saman");
 const { sum, tagged } = require("styp");
@@ -149,8 +150,6 @@ class TypeChecker {
     }
 
     rename(type,map) {
-        // console.log("inside rename")
-        // console.log(type?type.toString():"undef");
         return type.cata({
             TCon: t => t,
             TVar: ({ v }) => v in map? map[v]:Type.TVar(v),
@@ -177,14 +176,11 @@ class TypeChecker {
     }
 
     subst(ast,map={}) {
-        // console.log("Substitution starts here -->");
-        // console.log(ast.toString());
-        // console.log(map)
         if(TClosure.is(ast)) {
             if(ast.var in map) {
                 let temp = {}
                 let name = globalPrefix();
-                temp[ast.var] = Type.TVar(name)
+                temp[ast.var] = Expr.Var(name)
                 return Expr.TCons(name,ast.kind,this.subst(ast.body, temp));
             }
             return ast;
@@ -195,60 +191,28 @@ class TypeChecker {
                 this.subst(ast.to2,map)
             );
         }
-        const ct = convertType(ast);
-        // console.log("converted")
-        // console.log(ct)
-        return this.rename(ct,map);
+        return this.rename(convertType(ast),map);
     }
 
 
     handleTypes(type,env,tenv=this.tenv.env) {
-        // console.log("Handle types starts here -->");
-        // console.log(type);
-        // console.log("Current Type Environment")
-        // console.log(env)
-        // console.log(tenv)
         if(Expr.Var.is(type)) {
             if(type.name in tenv) return tenv[type.name];
-            // console.log("here looking up var");
-            // console.log(type.toString());
-            const val = env.lookUp(type.name);
-            // console.log(val);
-            return this.handleTypes(val,env,tenv);
+            return this.handleTypes(env.lookUp(type.name),env,tenv);
         }
         if(Expr.TCons.is(type)) {
             let fenv = {__proto__:tenv};
             let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env,fenv)));
-            // console.log("closure function");
-            // console.log(func);
             return func;
         }
-            // const t = this.check(type);
         if(Expr.TCApp.is(type)) {
-            const t = this.check(type);
-            // console.log("ast to1")
-            // console.log(type.to1)
             const to1 = this.handleTypes(type.to1,env,tenv);
-            // console.log(`hto1: ${to1}`)
             const to2 = this.handleTypes(type.to2,env,tenv);
-            // console.log(`hto2: ${to2}`)
-            // if(Expr.Var.is(to1)) to1 = tenv[to1.name]; // later
-            // Expr.TCons.is(to1)
-            // console.log("TO1|---->")
-            // console.log(to1)
-            if(TClosure.is(to1)) {
-                // const map = { __proto__:to1.env }
-                to1.env[to1.to.var] = to2
-                const out = this.subst(to1.to.body,to1.env);
-                // console.log("out type:")
-                // console.log(out);
-                return out
-            }
-            else genericError("Requires a Type Operator");
+            if(!TClosure.is(to1)) genericError("Requires a Type Operator");
+            to1.env[to1.to.var] = to2
+            return this.subst(to1.to.body,to1.env);
         }
         const temp = convertType(type);
-        // console.log("DEFAULT CASE");
-        // console.log(temp);
         return temp
     }
 
@@ -262,7 +226,6 @@ class TypeChecker {
     }
 
     checkLet(ast,env,tenv) {
-        // console.log("handling let binding");
         let t1;
         if(Expr.TCons.is(ast.e1)) t1 = ast.e1; 
         else if(Expr.TCApp.is(ast.e1)) t1 = this.handleTypes(ast.e1,env);
@@ -273,8 +236,6 @@ class TypeChecker {
             return this.check(ast.e2,ne);
         }
         env.addBinding(ast.name,t1);
-        // console.log(t1);
-        // console.log(env);
         return Type.is(t1) || Kind.is(t1)? t1 : this.check(ast.e1);
     }
 
@@ -289,8 +250,6 @@ class TypeChecker {
 
     checkLam(ast,env,tenv) {
         const vt = this.handleTypes(ast.type,env);
-        // console.log("<---Lambda Type--->");
-        // console.log(vt.toString());
         if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(env);
         ne.addBinding(ast.param, vt);
@@ -328,16 +287,11 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
-        // console.log("Inside TCApp");
         const t1 = this.checkHKT(ast.to1, env, tenv);
         let t2;
         if(Expr.is(ast.to2)) t2 = convertKind(this.checkHKT(ast.to2, env, tenv));
         else t2 = convertKind(convertType(ast.to2));
         if(!Kind.KArr.is(t1)) nonFunction(t1);
-        // console.log("type1");
-        // console.log(t1.toString());
-        // console.log("type2");
-        // console.log(t2.toString());
         if(!equal(t1.k1,t2)) typeMismatch(t1.k1,t2);
         return t1.k2;
     }
@@ -372,15 +326,9 @@ class TypeChecker {
     }
 
     check(ast, env = this.env, tenv = this.tenv) {
-        // console.log("check--")
-        // console.log(ast.toString());
-        if(Kind.is(ast)) return ast;
-        if(Type.is(ast)) return ast;
         return ast.cata({
             Lit: ({ type }) => PrimTypes[type],
             Var: ({ name }) => {
-                // console.log("here1234")
-                // console.log(name)
                 const e = env.lookUp(name);
                 if(Expr.is(e)) return this.check(e,env,tenv)
                 return e;
@@ -421,22 +369,26 @@ class TypeChecker {
 // const ex5 = Expr.Let("Pair",Expr.TCons("x","*",Expr.TCons("y","*",{var:"r",kind:"*",type:[["x",["y","r"]],"r"]})),null);
 // const ex6 = Expr.Let("fst",Expr.TLam("t1","*",Expr.TLam("t2","*",Expr.Lam("x",Expr.TCApp(Expr.TCApp(Expr.Var("Pair"),Expr.Var("t1")),Expr.Var("t2")),Expr.App(Expr.TApp(Expr.Var("x"),"t1"),Expr.Lam("x","t1",Expr.Lam("y","t2",Expr.Var("x"))))))),null);
 // const ex7 = Expr.Let("snd",Expr.TLam("t1","*",Expr.TLam("t2","*",Expr.Lam("x",Expr.TCApp(Expr.TCApp(Expr.Var("Pair"),Expr.Var("t1")),Expr.Var("t2")),Expr.App(Expr.TApp(Expr.Var("x"),"t2"),Expr.Lam("x","t1",Expr.Lam("y","t2",Expr.Var("y"))))))),null);
-// console.log(printType(tc1.check(ex5)));
 // console.log(printType(tc1.check(ex6)));
 // console.log(printType(tc1.check(ex7)));
 
 // const p1 = new Parser();
 // const ex9 = p1.parse(`let pair = (?t1. ?t2. \\x:t1. \\y:t2. ?r. \\f:t1->t2->r. f x y)`)
 // const ex8 = p1.parse("let thd = (?t1. ?t2. \\x:(Pair t1 t2). x [t1] (\\e1:t1. \\e2:t2. e1))");
+// const ex10 = p1.parse("\\y:(Pair number number). y [number] (\\x:number. \\y:number. x+y)");
+
 // console.log("handmade")
 // console.log(ex6.toString());
 // console.log(ex8.toString());
+// console.log(printType(tc1.check(ex5)));
 // console.log(printType(tc1.check(ex8)));
-// console.log(printType(tc1.check(ex9)));
+// console.log(printType(tc1.check(ex9)))
+// console.log(ex10.toString());
+// console.log(printType(tc1.check(ex10)));
 
 // test examples
 // \x::*. \y::*. x -> y
 // \x::*. \y::*. x
 // \x::*. \y::*. x y
 // \x::*. \y::*. @r. x -> y -> r
-module.exports = { TypeChecker, PrimTypes };
+module.exports = { TypeChecker, PrimTypes, printType };
