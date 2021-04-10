@@ -201,15 +201,23 @@ class TypeChecker {
     }
 
 
-    handleTypes(type,tenv=this.tenv.env) {
+    handleTypes(type,env,tenv=this.tenv.env) {
         // console.log("Handle types starts here -->");
         // console.log(type);
         console.log("Current Type Environment")
+        console.log(env)
         console.log(tenv)
-        if(Expr.Var.is(type) && ) return this.handleTypes(tenv[type.name],tenv);
+        if(Expr.Var.is(type) && type.name in tenv) return this.handleTypes(tenv[type.name],env,tenv);
+        if(Expr.Var.is(type)) {
+            console.log("here looking up var");
+            console.log(type.toString());
+            const val = env.lookUp(type.name);
+            console.log(val);
+            return this.handleTypes(val,env,tenv);
+        }
         if(Expr.TCons.is(type)) {
-            let env = {__proto__:tenv};
-            let func = TClosure(env,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env)));
+            let fenv = {__proto__:tenv};
+            let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env,fenv)));
             // console.log("closure function");
             // console.log(func);
             return func;
@@ -219,9 +227,9 @@ class TypeChecker {
             const t = this.check(type);
             console.log("ast to1")
             console.log(type.to1)
-            const to1 = this.handleTypes(type.to1,tenv);
+            const to1 = this.handleTypes(type.to1,env,tenv);
             // console.log(`hto1: ${to1}`)
-            const to2 = this.handleTypes(type.to2,tenv);
+            const to2 = this.handleTypes(type.to2,env,tenv);
             // console.log(`hto2: ${to2}`)
             // if(Expr.Var.is(to1)) to1 = tenv[to1.name]; // later
             // Expr.TCons.is(to1)
@@ -250,8 +258,10 @@ class TypeChecker {
     }
 
     checkLet(ast,env,tenv) {
+        console.log("handling let binding");
         let t1;
-        if(Expr.TCons.is(ast) || Expr.TCApp.is(ast)) t1 = ast.e1;
+        if(Expr.TCons.is(ast.e1)) t1 = ast.e1; 
+        else if(Expr.TCApp.is(ast.e1)) t1 = this.handleTypes(ast.e1,env);
         else t1 = this.check(ast.e1,env);
         if(ast.e2) {
             const ne = new TypeEnv(env);
@@ -259,11 +269,13 @@ class TypeChecker {
             return this.check(ast.e2,ne);
         }
         env.addBinding(ast.name,t1);
-        return t1;
+        console.log(t1);
+        console.log(env);
+        return Type.is(t1) || Kind.is(t1)? t1 : this.check(ast.e1);
     }
 
     checkTLam(ast,env,tenv) {
-        const tv = this.handleTypes(ast.param);
+        const tv = this.handleTypes(ast.param,env);
         if(!this.verifyType(tv)) notAType(tv);
         this.tenv.addBinding(tv.v, convertKind(ast.kind));
         const body = this.check(ast.body, env);
@@ -272,7 +284,9 @@ class TypeChecker {
     }
 
     checkLam(ast,env,tenv) {
-        const vt = this.handleTypes(ast.type);
+        const vt = this.handleTypes(ast.type,env);
+        console.log("<---Lambda Type--->");
+        console.log(vt.toString());
         if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(env);
         ne.addBinding(ast.param, vt);
@@ -290,7 +304,7 @@ class TypeChecker {
 
     checkTApp(ast,env,tenv) {
         const t1 = this.check(ast.tl, env);
-        const t2 = this.handleTypes(ast.t);
+        const t2 = this.handleTypes(ast.t,env);
         if(!this.verifyType(t2)) notAType(t2);
         if(!Type.Forall.is(t1)) nonGenFunction(t1);
         const map = {}
@@ -361,6 +375,8 @@ class TypeChecker {
         return ast.cata({
             Lit: ({ type }) => PrimTypes[type],
             Var: ({ name }) => {
+                console.log("here1234")
+                console.log(name)
                 const e = env.lookUp(name);
                 if(Expr.is(e)) return this.check(e,env,tenv)
                 return e;
