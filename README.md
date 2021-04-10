@@ -4,3 +4,6 @@
 </div>
 
 System F Omega Calculus. This implements Let bindings, Sum types, Polymorphic Lambdas, Type operators, Higher-Kinded types etc.
+
+## REPL
+<img src="./static/repl.png" />
