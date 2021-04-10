@@ -6,7 +6,7 @@ const machine = new Interpreter();
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
-  prompt: 'omeg> '
+  prompt: 'om> '
 });
 
 console.log(

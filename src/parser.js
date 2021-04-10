@@ -223,7 +223,7 @@ const handlers = {
             const tok = this.peek();
             if(tok.type === "DEFT") {
                 this.consume();
-                const type = this.type(":");
+                let type = this.type(":");
                 this.expect("BODY","Expected '.'");
                 const body = this.expression(0);
                 return Expr.Lam(param.name,type,body);

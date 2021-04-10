@@ -202,8 +202,8 @@ class Interpreter {
 
     evaluate(str) {
         const ast = this.parser.parse(str);
-        console.log("AST:");
-        console.log(ast.toString());
+        // console.log("AST:");
+        // console.log(ast.toString());
         const type = this.checker.prove(ast);
         console.log("Type:");
         console.log(type);
