@@ -6,7 +6,7 @@
 
 // TODO: Improve and optimize
 // TODO: the current implementation of the kinding system is a !very! adhoc will restructure the whole thing,
-// and also cover all the kind check cases
+// also cover all the kind check cases and seperate and clean up access of all the contexts
 // Dep
 const { equal } = require("saman");
 const { sum, tagged } = require("styp");
@@ -108,7 +108,7 @@ class TypeEnv {
 
     exists(name) {
         if (this.env[name]) return this.env[name];
-        else if (this.parent) return this.parent.lookUp(name);
+        else if (this.parent) return this.parent.exists(name);
         return false;
     }
 
@@ -175,9 +175,23 @@ class TypeChecker {
         return equal(t1,t2);
     }
 
-    subst(ast,map={}) {
+    subsR(type,map) {
+        return type.cata({
+            TCon: t => t,
+            TVar: ({ v }) => map.exists(v)? map.lookUp(v):Type.TVar(v),
+            TArr: ({ t1, t2 }) => Type.TArr(this.subsR(t1,map), this.subsR(t2,map)),
+            Forall: f => Type.Forall(f.var,f.kind,this.subsR(f.type,map))
+        });
+    }
+
+    subst(ast,map) {
+        // if(Expr.Var.is(ast) && ast.name in map && Kind.is(map[ast.name])) {
+        //     console.log("------------|-----------------1")
+        //     console.log(ast)
+        //     return ast;
+        // }
         if(TClosure.is(ast)) {
-            if(ast.var in map) {
+            if(map.exists(ast.var)) {
                 let temp = {}
                 let name = globalPrefix();
                 temp[ast.var] = Expr.Var(name)
@@ -191,36 +205,64 @@ class TypeChecker {
                 this.subst(ast.to2,map)
             );
         }
-        return this.rename(convertType(ast),map);
+        return this.subsR(convertType(ast),map);
     }
 
-
-    handleTypes(type,env,tenv=this.tenv.env) {
-        if(tenv instanceof TypeEnv) tenv = tenv.env;
-        console.log(env)
-        console.log(tenv)
-        console.log(type.toString())
+    createClosure(type,env,tenv) {
+        console.log("Inside create closure")
+        console.log(type)
         if(Expr.Var.is(type)) {
-            if(type.name in tenv) return tenv[type.name];
-            return this.handleTypes(env.lookUp(type.name),env,tenv);
+            console.log("------------|-----------------2")
+            console.log(type)
+            let v = tenv.exists(type.name);
+            if(Expr.is(v) || !Kind.is(v)) return v;
+            v = env.exists(type.name);
+            if(Expr.is(v)|| Kind.is(v)) return this.createClosure(v,env,tenv);
+            return type;
         }
         if(Expr.TCons.is(type)) {
-            console.log("Closure");
-            let fenv = {__proto__:tenv};
-            fenv[type.var.name] = type.var;
-            let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env,fenv)));
+            let fenv = new TypeEnv(tenv);
+            fenv.addBinding(type.var.name,convertKind(type.kind));
+            let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.createClosure(type.body,env,fenv)));
+            // fenv.removeBinding(type.var.name)
+            // fenv.addBinding(type.var.name,convertKind(type.kind))
+            console.log("------------|-----------------3")
             console.log(func);
             return func;
         }
         if(Expr.TCApp.is(type)) {
-            const to1 = this.handleTypes(type.to1,env,tenv);
-            const to2 = this.handleTypes(type.to2,env,tenv);
-            if(!TClosure.is(to1)) genericError("Requires a Type Operator");
-            to1.env[to1.to.var] = to2
-            return this.subst(to1.to.body,to1.env);
+            this.check(type,env,tenv);
+            return type;
+            // genericError("Requires a Type Operator");
         }
-        const temp = convertType(type);
-        return temp
+        return convertType(type);
+    }
+
+    handleTypes(type,env,tenv=this.tenv,flag=true) {
+        console.log("handling types");
+        console.log(type)
+        if(Type.is(type)) return type;
+        if(Expr.TCApp.is(type)) {
+            // !(TClosure.is(type.to1) || TClosure.is(type.to2))
+            if(flag) this.check(type,env,tenv);
+            // 
+            // TClosure.is(type.to2)
+            const to1 = TClosure.is(type.to1) ? type.to1:this.handleTypes(type.to1,env,tenv,flag);
+            const to2 = TClosure.is(type.to1) ? type.to2:this.handleTypes(type.to2,env,tenv,flag);
+            if(!TClosure.is(to1)) genericError("Requires a Type Operator");
+            console.log("here!")
+            console.log(to1)
+            to1.env.removeBinding(to1.to.var.name);
+            to1.env.addBinding(to1.to.var.name,to2);
+            console.log("env-->")
+            console.log(to1.env.env)
+            let out = this.subst(to1.to.body,to1.env);
+            if(!Type.is(out) && flag) out = this.handleTypes(out,env,tenv,false);
+            console.log("after!")
+            console.log(out.toString());
+            return out
+        }
+        return this.createClosure(type,env,tenv);
     }
 
     checkCond(ast,env,tenv) {
@@ -299,6 +341,8 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
+        console.log("Checking Type App")
+        console.log(ast)
         console.log(env)
         console.log(tenv)
         const t1 = this.checkHKT(ast.to1, env, tenv);
@@ -307,6 +351,7 @@ class TypeChecker {
         else t2 = convertKind(convertType(ast.to2));
         if(!Kind.KArr.is(t1)) nonFunction(t1);
         if(!equal(t1.k1,t2)) typeMismatch(t1.k1,t2);
+        console.log(printType(t1));
         return t1.k2;
     }
 
@@ -368,6 +413,7 @@ class TypeChecker {
 // \x:((\t1::*=>*=>*. t1 number number) TPair). x
 const p1 = new Parser();
 const tc1 = new TypeChecker();
-console.log(tc1.prove(p1.parse("\\x:((\\t1::*=>*=>*. t1 number number) TPair). x")))
+console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
+console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
 
 module.exports = { TypeChecker, PrimTypes, printType };
