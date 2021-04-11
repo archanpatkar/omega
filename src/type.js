@@ -22,7 +22,8 @@ const Type = sum("Types", {
     TVar: ["v"],
     TCon: ["name"],
     TArr: ["t1", "t2"],
-    Forall: ["var", "kind", "type"]
+    Forall: ["var", "kind", "type"],
+    Hole: ["type"]
 });
 
 const Kind = sum("Kind", {
@@ -31,7 +32,7 @@ const Kind = sum("Kind", {
 });
 
 const TClosure = tagged("TClosure",["env","to"]);
-
+const Hole = Symbol("Hole");
 const TNumber = Type.TCon("number");
 const TBool = Type.TCon("bool");
 const TUnit = Type.TCon("unit");
@@ -67,6 +68,7 @@ function convertType(type) {
     if(typeof type === "string") return Type.TVar(type);
     if(Expr.Var.is(type)) return Type.TVar(type.name);
     if(Array.isArray(type)) return Type.TArr(convertType(type[0]),convertType(type[1]));
+    // if(Expr.TCApp.is(type)) return Type.
     if(typeof type === "object") return Type.Forall([Type.TVar(type.var)],convertKind(type.kind),convertType(type.type));
 }
 
@@ -77,17 +79,22 @@ function convertKind(kind) {
 }
 
 function printType(type,level=0) {
+    console.log(type)
     if(Kind.is(type)) {
         return type.cata({
             Star: _ => "*",
             KArr: ({k1, k2}) => `${printType(k1)} => ${printType(k2)}`
         });
     }
+    if(Expr.TCApp.is(type)) {
+        return `(${printType(type.to1)} ${printType(type.to2)})`
+    }
     return type.cata({
         TCon: ({ name }) => name,
         TVar: ({ v }) => v,
         TArr: ({ t1, t2 }) => `${level?"(":""}${printType(t1,level+1)} -> ${printType(t2,level+1)}${level?")":""}`,
-        Forall: f => f.var.length?`∀ ${f.var.map(e => printType(e,level+1)).join(" ")}::${printType(f.kind)}. ${printType(f.type,level+1)}`: printType(f.type,level+1)
+        Forall: f => f.var.length?`∀ ${f.var.map(e => printType(e,level+1)).join(" ")}::${printType(f.kind)}. ${printType(f.type,level+1)}`: printType(f.type,level+1),
+        Hole: h => printType(h.type)
     });
 }
 
@@ -154,7 +161,8 @@ class TypeChecker {
             TCon: t => t,
             TVar: ({ v }) => v in map? map[v]:Type.TVar(v),
             TArr: ({ t1, t2 }) => Type.TArr(this.rename(t1,map), this.rename(t2,map)),
-            Forall: f => Type.Forall(f.var,f.kind,this.rename(f.type,map))
+            Forall: f => Type.Forall(f.var,f.kind,this.rename(f.type,map)),
+            Hole: h => h
         });
     }
 
@@ -180,7 +188,8 @@ class TypeChecker {
             TCon: t => t,
             TVar: ({ v }) => map.exists(v)? map.lookUp(v):Type.TVar(v),
             TArr: ({ t1, t2 }) => Type.TArr(this.subsR(t1,map), this.subsR(t2,map)),
-            Forall: f => Type.Forall(f.var,f.kind,this.subsR(f.type,map))
+            Forall: f => Type.Forall(f.var,f.kind,this.subsR(f.type,map)),
+            Hole: h => h
         });
     }
 
@@ -249,6 +258,9 @@ class TypeChecker {
             // TClosure.is(type.to2)
             const to1 = TClosure.is(type.to1) ? type.to1:this.handleTypes(type.to1,env,tenv,flag);
             const to2 = TClosure.is(type.to1) ? type.to2:this.handleTypes(type.to2,env,tenv,flag);
+            console.log(to1);
+            console.log(to2);
+            if(to1 === Hole) return Type.Hole(convertType(type));
             if(!TClosure.is(to1)) genericError("Requires a Type Operator");
             // console.log("here!")
             // console.log(to1)
@@ -289,22 +301,38 @@ class TypeChecker {
     }
 
     checkTLam(ast,env,tenv) {
-        const tv = this.handleTypes(ast.param,env);
+        console.log("Entering TLam");
+        let tk = convertKind(ast.kind);
+        if(Kind.KArr.is(tk)) {
+            tk = Hole;
+        }
+        const tv = convertType(ast.param);
+        console.log(tk);
+        console.log(tv);
+        this.tenv.addBinding(tv.v, tk);
         if(!this.verifyType(tv)) notAType(tv);
-        this.tenv.addBinding(tv.v, convertKind(ast.kind));
         const body = this.check(ast.body, env);
+        console.log("body:")
+        console.log(body)
         this.tenv.removeBinding(tv.v);
-        // if(Kind.KArr.is()) {
-        // }
-        return Type.Forall([tv],convertKind(ast.kind),body);
+        const out = Type.Forall([tv],tk,body);
+        console.log("out:");
+        console.log(out);
+        return out;
     }
 
     checkLam(ast,env,tenv) {
-        const vt = this.handleTypes(ast.type,env,tenv);
-        if(!this.verifyType(vt)) notAType(vt);
+        console.log(env.env)
+        console.log(tenv.env)
+        let vt = this.handleTypes(ast.type,env,tenv);
+        console.log("lam type")
+        console.log(vt.toString());
+        if(vt === Hole) vt = ast.type;
+        else if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(env);
         ne.addBinding(ast.param, vt);
         const body = this.check(ast.body, ne);
+
         return Type.TArr(vt, body);
     }
 
@@ -319,13 +347,13 @@ class TypeChecker {
     checkTApp(ast,env,tenv) {
         const t1 = this.check(ast.tl, env);
         const t2 = this.handleTypes(ast.t,env,tenv);
-        if(!this.verifyType(t2)) notAType(t2);
-        if(!Type.Forall.is(t1)) nonGenFunction(t1);
+        if(!this.verifyType(t2) && !t1 === Hole) notAType(t2);
+        if(!Type.Forall.is(t1) && !t1 === Hole) nonGenFunction(t1);
         let kt;
         if(Expr.TCons.is(ast.t) || Expr.TCApp.is(ast.t)) kt = this.check(ast.t,env,tenv);
         else kt = convertKind("*");
-        if(!Kind.KArr.is(kt) && !this.verifyType(t2)) notAType(t2);
-        if(!equal(t1.kind,kt)) genericError("Kinds do not match!");
+        if(!Kind.KArr.is(kt) && !this.verifyType(t2) && !t1 === Hole) notAType(t2);
+        if(!equal(t1.kind,kt) && !t1 === Hole) genericError("Kinds do not match!");
         const map = {}
         map[t1.var[0].v] = t2;
         return this.rename(t1.type,map);
@@ -351,8 +379,8 @@ class TypeChecker {
         let t2;
         if(Expr.is(ast.to2)) t2 = convertKind(this.checkHKT(ast.to2, env, tenv));
         else t2 = convertKind(convertType(ast.to2));
-        if(!Kind.KArr.is(t1)) nonFunction(t1);
-        if(!equal(t1.k1,t2)) typeMismatch(t1.k1,t2);
+        if(!Kind.KArr.is(t1) && !t1 === Hole) nonFunction(t1);
+        if(!equal(t1.k1,t2) && !t1 === Hole) typeMismatch(t1.k1,t2);
         // console.log(printType(t1));
         return t1.k2;
     }
@@ -413,11 +441,11 @@ class TypeChecker {
 }
 
 // \x:((\t1::*=>*=>*. t1 number number) TPair). x
-// const p1 = new Parser();
-// const tc1 = new TypeChecker();
+const p1 = new Parser();
+const tc1 = new TypeChecker();
 // console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
 // console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
-// Solve this case
-// console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a number). n) [\\x::*. x]")))
+// Solve this case -
+console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a number). n) [\\x::*. x]")))
 
 module.exports = { TypeChecker, PrimTypes, printType };
