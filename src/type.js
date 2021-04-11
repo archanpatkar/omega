@@ -209,11 +209,11 @@ class TypeChecker {
     }
 
     createClosure(type,env,tenv) {
-        console.log("Inside create closure")
-        console.log(type)
+        // console.log("Inside create closure")
+        // console.log(type)
         if(Expr.Var.is(type)) {
-            console.log("------------|-----------------2")
-            console.log(type)
+            // console.log("------------|-----------------2")
+            // console.log(type)
             let v = tenv.exists(type.name);
             if(Expr.is(v) || !Kind.is(v)) return v;
             v = env.exists(type.name);
@@ -226,8 +226,8 @@ class TypeChecker {
             let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.createClosure(type.body,env,fenv)));
             // fenv.removeBinding(type.var.name)
             // fenv.addBinding(type.var.name,convertKind(type.kind))
-            console.log("------------|-----------------3")
-            console.log(func);
+            // console.log("------------|-----------------3")
+            // console.log(func);
             return func;
         }
         if(Expr.TCApp.is(type)) {
@@ -239,8 +239,8 @@ class TypeChecker {
     }
 
     handleTypes(type,env,tenv=this.tenv,flag=true) {
-        console.log("handling types");
-        console.log(type)
+        // console.log("handling types");
+        // console.log(type)
         if(Type.is(type)) return type;
         if(Expr.TCApp.is(type)) {
             // !(TClosure.is(type.to1) || TClosure.is(type.to2))
@@ -250,16 +250,16 @@ class TypeChecker {
             const to1 = TClosure.is(type.to1) ? type.to1:this.handleTypes(type.to1,env,tenv,flag);
             const to2 = TClosure.is(type.to1) ? type.to2:this.handleTypes(type.to2,env,tenv,flag);
             if(!TClosure.is(to1)) genericError("Requires a Type Operator");
-            console.log("here!")
-            console.log(to1)
+            // console.log("here!")
+            // console.log(to1)
             to1.env.removeBinding(to1.to.var.name);
             to1.env.addBinding(to1.to.var.name,to2);
-            console.log("env-->")
-            console.log(to1.env.env)
+            // console.log("env-->")
+            // console.log(to1.env.env)
             let out = this.subst(to1.to.body,to1.env);
             if(!Type.is(out) && flag) out = this.handleTypes(out,env,tenv,false);
-            console.log("after!")
-            console.log(out.toString());
+            // console.log("after!")
+            // console.log(out.toString());
             return out
         }
         return this.createClosure(type,env,tenv);
@@ -291,9 +291,11 @@ class TypeChecker {
     checkTLam(ast,env,tenv) {
         const tv = this.handleTypes(ast.param,env);
         if(!this.verifyType(tv)) notAType(tv);
-        this.tenv.addBinding(tv.v, tv);
+        this.tenv.addBinding(tv.v, convertKind(ast.kind));
         const body = this.check(ast.body, env);
         this.tenv.removeBinding(tv.v);
+        // if(Kind.KArr.is()) {
+        // }
         return Type.Forall([tv],convertKind(ast.kind),body);
     }
 
@@ -341,17 +343,17 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
-        console.log("Checking Type App")
-        console.log(ast)
-        console.log(env)
-        console.log(tenv)
+        // console.log("Checking Type App")
+        // console.log(ast)
+        // console.log(env)
+        // console.log(tenv)
         const t1 = this.checkHKT(ast.to1, env, tenv);
         let t2;
         if(Expr.is(ast.to2)) t2 = convertKind(this.checkHKT(ast.to2, env, tenv));
         else t2 = convertKind(convertType(ast.to2));
         if(!Kind.KArr.is(t1)) nonFunction(t1);
         if(!equal(t1.k1,t2)) typeMismatch(t1.k1,t2);
-        console.log(printType(t1));
+        // console.log(printType(t1));
         return t1.k2;
     }
 
@@ -411,9 +413,11 @@ class TypeChecker {
 }
 
 // \x:((\t1::*=>*=>*. t1 number number) TPair). x
-const p1 = new Parser();
-const tc1 = new TypeChecker();
-console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
-console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
+// const p1 = new Parser();
+// const tc1 = new TypeChecker();
+// console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
+// console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
+// Solve this case
+// console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a number). n) [\\x::*. x]")))
 
 module.exports = { TypeChecker, PrimTypes, printType };
