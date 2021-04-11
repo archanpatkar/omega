@@ -5,7 +5,7 @@
 // https://crypto.stanford.edu/~blynn/lambda/typo.html
 
 // TODO: Improve and optimize
-// TODO: the current implementation of the kinding system is a bit adhoc will restructure the whole thing,
+// TODO: the current implementation of the kinding system is a !very! adhoc will restructure the whole thing,
 // and also cover all the kind check cases
 // Dep
 const { equal } = require("saman");
@@ -196,13 +196,20 @@ class TypeChecker {
 
 
     handleTypes(type,env,tenv=this.tenv.env) {
+        if(tenv instanceof TypeEnv) tenv = tenv.env;
+        console.log(env)
+        console.log(tenv)
+        console.log(type.toString())
         if(Expr.Var.is(type)) {
             if(type.name in tenv) return tenv[type.name];
             return this.handleTypes(env.lookUp(type.name),env,tenv);
         }
         if(Expr.TCons.is(type)) {
+            console.log("Closure");
             let fenv = {__proto__:tenv};
+            fenv[type.var.name] = type.var;
             let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.handleTypes(type.body,env,fenv)));
+            console.log(func);
             return func;
         }
         if(Expr.TCApp.is(type)) {
@@ -228,7 +235,7 @@ class TypeChecker {
     checkLet(ast,env,tenv) {
         let t1;
         if(Expr.TCons.is(ast.e1)) t1 = ast.e1; 
-        else if(Expr.TCApp.is(ast.e1)) t1 = this.handleTypes(ast.e1,env);
+        else if(Expr.TCApp.is(ast.e1)) t1 = this.handleTypes(ast.e1,env,tenv);
         else t1 = this.check(ast.e1,env);
         if(ast.e2) {
             const ne = new TypeEnv(env);
@@ -249,7 +256,7 @@ class TypeChecker {
     }
 
     checkLam(ast,env,tenv) {
-        const vt = this.handleTypes(ast.type,env);
+        const vt = this.handleTypes(ast.type,env,tenv);
         if(!this.verifyType(vt)) notAType(vt);
         const ne = new TypeEnv(env);
         ne.addBinding(ast.param, vt);
@@ -267,7 +274,7 @@ class TypeChecker {
 
     checkTApp(ast,env,tenv) {
         const t1 = this.check(ast.tl, env);
-        const t2 = this.handleTypes(ast.t,env);
+        const t2 = this.handleTypes(ast.t,env,tenv);
         if(!this.verifyType(t2)) notAType(t2);
         if(!Type.Forall.is(t1)) nonGenFunction(t1);
         let kt;
@@ -283,7 +290,7 @@ class TypeChecker {
     checkTCons(ast,env,tenv) {
         const vt = convertKind(ast.kind);
         const ne = new TypeEnv(tenv);
-        ne.addBinding(ast.param, vt);
+        ne.addBinding(ast.var.name, vt);
         let body;
         if(Expr.is(ast.body)) body = this.checkHKT(ast.body,env,ne);
         else body = convertType(ast.body);
@@ -292,6 +299,8 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
+        console.log(env)
+        console.log(tenv)
         const t1 = this.checkHKT(ast.to1, env, tenv);
         let t2;
         if(Expr.is(ast.to2)) t2 = convertKind(this.checkHKT(ast.to2, env, tenv));
@@ -355,5 +364,10 @@ class TypeChecker {
         return printType(this.check(ast));
     }
 }
+
+// \x:((\t1::*=>*=>*. t1 number number) TPair). x
+const p1 = new Parser();
+const tc1 = new TypeChecker();
+console.log(tc1.prove(p1.parse("\\x:((\\t1::*=>*=>*. t1 number number) TPair). x")))
 
 module.exports = { TypeChecker, PrimTypes, printType };
