@@ -408,16 +408,21 @@ class TypeChecker {
     }
 
     checkTCApp(ast,env,tenv) {
-        // console.log("Checking Type App")
-        // console.log(ast)
-        // console.log(env)
-        // console.log(tenv)
+        console.log("Checking Type App")
+        console.log(ast)
+        console.log(env)
+        console.log(tenv)
         const t1 = this.checkHKT(ast.to1, env, tenv);
         let t2;
         if(Expr.is(ast.to2)) t2 = convertKind(this.checkHKT(ast.to2, env, tenv));
         else t2 = convertKind(convertType(ast.to2));
+        // console.log("Check Type Cons");
+        // console.log(ast)
         if(!Kind.KArr.is(t1) && !t1 === Hole) nonFunction(t1);
-        if(!equal(t1.k1,t2) && !t1 === Hole) typeMismatch(t1.k1,t2);
+        console.log("here!#!#!");
+        console.log(t1)
+        console.log(t2)
+        if((!TClosure.is(t1) || !equal(t1.k1,t2)) && !t1 === Hole) typeMismatch(t1.k1,t2);
         // console.log(printType(t1));
         return t1.k2;
     }
@@ -452,6 +457,7 @@ class TypeChecker {
     }
 
     check(ast, env = this.env, tenv = this.tenv) {
+        console.log("Main Checker!");
         console.log(ast);
         return ast.cata({
             Lit: ({ type }) => PrimTypes[type],
@@ -484,5 +490,5 @@ const tc1 = new TypeChecker();
 // console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
 // console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
 // Solve this case - 
-console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a number). n) [\\x::*. x]")))
-module.exports = { TypeChecker, PrimTypes, printType };
+console.log(tc1.prove(p1.parse("(?a::*=>*=>*. \\n:(a number bool). n) [\\x::*. \\y::*. y]")))
+module.exports = { TypeChecker, PrimTypes, printType }; 
