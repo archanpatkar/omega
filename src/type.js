@@ -348,10 +348,31 @@ class TypeChecker {
     
     checkTempTL(ast,t1,t2,env,tenv) {
         console.log("checking temp tl");
+        console.log("ast");
         console.log(ast);
+        console.log("t1");
         console.log(t1);
+        console.log("t2");
         console.log(t2);
-        return Kind.Star("incomplete");
+        console.log("env");
+        console.log(env);
+        console.log("tenv");
+        console.log(tenv);
+        console.log("here1!");
+        const tk = convertKind(ast.tl.kind);
+        console.log("tlam kind");
+        console.log(tk);
+        if(!equal(tk,t2) && !TClosure.is(t2)) genericError("Not matching kinds");
+        const tv = convertType(ast.tl.param);
+        const local = new TypeEnv(tenv);
+        local.addBinding(ast.tl.param,t2);
+        const body = this.check(ast.tl.body, env, local);
+        console.log("body:");
+        console.log(body);
+        const out = Type.Forall([tv],tk,body);
+        console.log("out:");
+        console.log(out);
+        return out;
     }
 
     checkTApp(ast,env,tenv) {
@@ -409,8 +430,8 @@ class TypeChecker {
     }
     
     checkBinOp(ast,env,tenv) {
-        const t1 = this.check(ast.l,env);
-        const t2 = this.check(ast.r,env);
+        const t1 = this.check(ast.l,env,tenv);
+        const t2 = this.check(ast.r,env,tenv);
         let op = optypes[ast.op];
         if(Type.Forall.is(op)) {   
             const map = {}
@@ -462,6 +483,6 @@ const p1 = new Parser();
 const tc1 = new TypeChecker();
 // console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
 // console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
-// Solve this case -
+// Solve this case - 
 console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a number). n) [\\x::*. x]")))
 module.exports = { TypeChecker, PrimTypes, printType };
