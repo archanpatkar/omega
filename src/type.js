@@ -216,7 +216,7 @@ class TypeChecker {
             if(Expr.is(v) || !Kind.is(v)) return v;
             v = env.exists(type.name);
             if(Expr.is(v) || Kind.is(v)) return this.createClosure(v,env,tenv);
-            return type;
+            return convertType(type);
         }
         if(TClosure.is(type) && (Expr.TCons.is(type.to) || Expr.TCApp.is(type.to))) {
             return this.createClosure(type.to,env,type.env);
