@@ -82,7 +82,7 @@ function printType(type,level=0) {
     console.log(type)
     if(Kind.is(type)) {
         return type.cata({
-            Star: _ => "*",
+            Star: _ => _.type,
             KArr: ({k1, k2}) => `${printType(k1)} => ${printType(k2)}`
         });
     }
@@ -199,6 +199,8 @@ class TypeChecker {
         //     console.log(ast)
         //     return ast;
         // }
+        console.log("subst:");
+        console.log(ast);
         if(TClosure.is(ast)) {
             if(map.exists(ast.var)) {
                 let temp = {}
@@ -218,8 +220,8 @@ class TypeChecker {
     }
 
     createClosure(type,env,tenv) {
-        // console.log("Inside create closure")
-        // console.log(type)
+        console.log("Inside create closure")
+        console.log(type)
         if(Expr.Var.is(type)) {
             // console.log("------------|-----------------2")
             // console.log(type)
@@ -248,8 +250,8 @@ class TypeChecker {
     }
 
     handleTypes(type,env,tenv=this.tenv,flag=true) {
-        // console.log("handling types");
-        // console.log(type)
+        console.log("handling types");
+        console.log(type)
         if(Type.is(type)) return type;
         if(Expr.TCApp.is(type)) {
             // !(TClosure.is(type.to1) || TClosure.is(type.to2))
@@ -303,15 +305,15 @@ class TypeChecker {
     checkTLam(ast,env,tenv) {
         console.log("Entering TLam");
         let tk = convertKind(ast.kind);
-        if(Kind.KArr.is(tk)) {
-            tk = Hole;
+        if(Kind.KArr.is(tk) && !tenv.exists(ast.param)) {
+            return Type.Hole(Type.TArr(tk,Kind.Star("⊥")));
         }
         const tv = convertType(ast.param);
         console.log(tk);
         console.log(tv);
         this.tenv.addBinding(tv.v, tk);
         if(!this.verifyType(tv)) notAType(tv);
-        const body = this.check(ast.body, env);
+        const body = this.check(ast.body, env, tenv);
         console.log("body:")
         console.log(body)
         this.tenv.removeBinding(tv.v);
@@ -343,6 +345,14 @@ class TypeChecker {
         if(!this.equalTypes(t1.t1,t2)) typeMismatch(t1.t1,t2);
         return t1.t2;
     }
+    
+    checkTempTL(ast,t1,t2,env,tenv) {
+        console.log("checking temp tl");
+        console.log(ast);
+        console.log(t1);
+        console.log(t2);
+        return Kind.Star("incomplete");
+    }
 
     checkTApp(ast,env,tenv) {
         const t1 = this.check(ast.tl, env);
@@ -354,6 +364,12 @@ class TypeChecker {
         else kt = convertKind("*");
         if(!Kind.KArr.is(kt) && !this.verifyType(t2) && !t1 === Hole) notAType(t2);
         if(!equal(t1.kind,kt) && !t1 === Hole) genericError("Kinds do not match!");
+        console.log("Checking t app");
+        console.log(t1);
+        console.log(t2);
+        if(Type.Hole.is(t1)) {
+            return this.checkTempTL(ast,t1,t2,env,tenv);
+        }
         const map = {}
         map[t1.var[0].v] = t2;
         return this.rename(t1.type,map);
@@ -415,6 +431,7 @@ class TypeChecker {
     }
 
     check(ast, env = this.env, tenv = this.tenv) {
+        console.log(ast);
         return ast.cata({
             Lit: ({ type }) => PrimTypes[type],
             Var: ({ name }) => {
@@ -447,5 +464,4 @@ const tc1 = new TypeChecker();
 // console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
 // Solve this case -
 console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a number). n) [\\x::*. x]")))
-
 module.exports = { TypeChecker, PrimTypes, printType };
