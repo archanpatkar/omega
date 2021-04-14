@@ -31,7 +31,7 @@ const Kind = sum("Kind", {
     KArr:["k1","k2"]
 });
 
-const TClosure = tagged("TClosure",["env","to"]);
+const TClosure = tagged("TClosure",["env","to","kind"]);
 const Hole = Symbol("Hole");
 const TNumber = Type.TCon("number");
 const TBool = Type.TCon("bool");
@@ -96,6 +96,15 @@ function printType(type,level=0) {
         Forall: f => f.var.length?`∀ ${f.var.map(e => printType(e,level+1)).join(" ")}::${printType(f.kind)}. ${printType(f.type,level+1)}`: printType(f.type,level+1),
         Hole: h => printType(h.type)
     });
+}
+
+function printEnv(e) {
+    if(e instanceof TypeEnv) {
+        console.log("_e_")
+        console.log(e.env)
+        printEnv(e.parent);
+    }
+    return ""
 }
 
 // Errors
@@ -231,10 +240,13 @@ class TypeChecker {
             if(Expr.is(v)|| Kind.is(v)) return this.createClosure(v,env,tenv);
             return type;
         }
+        if(TClosure.is(type) && (Expr.TCons.is(type.to) || Expr.TCApp.is(type.to))) {
+            return this.createClosure(type.to,env,type.env);
+        }
         if(Expr.TCons.is(type)) {
             let fenv = new TypeEnv(tenv);
             fenv.addBinding(type.var.name,convertKind(type.kind));
-            let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.createClosure(type.body,env,fenv)));
+            let func = TClosure(fenv,Expr.TCons(type.var,type.kind,this.createClosure(type.body,env,fenv)),null);
             // fenv.removeBinding(type.var.name)
             // fenv.addBinding(type.var.name,convertKind(type.kind))
             // console.log("------------|-----------------3")
@@ -251,7 +263,9 @@ class TypeChecker {
 
     handleTypes(type,env,tenv=this.tenv,flag=true) {
         console.log("handling types");
-        console.log(type)
+        console.log(type);
+        console.log("----env----");
+        printEnv(type.env);
         if(Type.is(type)) return type;
         if(Expr.TCApp.is(type)) {
             // !(TClosure.is(type.to1) || TClosure.is(type.to2))
@@ -260,6 +274,7 @@ class TypeChecker {
             // TClosure.is(type.to2)
             const to1 = TClosure.is(type.to1) ? type.to1:this.handleTypes(type.to1,env,tenv,flag);
             const to2 = TClosure.is(type.to1) ? type.to2:this.handleTypes(type.to2,env,tenv,flag);
+            console.log("*|--to1--to2--|*")
             console.log(to1);
             console.log(to2);
             if(to1 === Hole) return Type.Hole(convertType(type));
@@ -272,8 +287,9 @@ class TypeChecker {
             // console.log(to1.env.env)
             let out = this.subst(to1.to.body,to1.env);
             if(!Type.is(out) && flag) out = this.handleTypes(out,env,tenv,false);
-            // console.log("after!")
+            console.log("after!")
             // console.log(out.toString());
+            console.log(out)
             return out
         }
         return this.createClosure(type,env,tenv);
@@ -424,7 +440,7 @@ class TypeChecker {
         console.log(t2)
         if((!TClosure.is(t1) || !equal(t1.k1,t2)) && !t1 === Hole) typeMismatch(t1.k1,t2);
         // console.log(printType(t1));
-        return t1.k2;
+        return TClosure.is(t1)?t1:t1.k2;
     }
 
     checkUnOp(ast,env,tenv) {
@@ -490,5 +506,6 @@ const tc1 = new TypeChecker();
 // console.log(tc1.prove(p1.parse("(\\x:((\\t::*=>*. t number) (\\x::*. x)). x)")))
 // console.log(tc1.prove(p1.parse("\\x:((\\x::*=>*=>*. x number number) (\\t1::*. \\t2::*. @R. (t1->t2->R)->R)). x")))
 // Solve this case - 
+console.log(tc1.prove(p1.parse("(?a::*=>*. \\n:(a bool). n) [\\x::*. x]")))
 console.log(tc1.prove(p1.parse("(?a::*=>*=>*. \\n:(a number bool). n) [\\x::*. \\y::*. y]")))
 module.exports = { TypeChecker, PrimTypes, printType }; 
