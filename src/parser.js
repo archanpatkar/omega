@@ -385,7 +385,7 @@ class Parser {
             left = multiThis(handlers[token.type].nud,handlers[token.type],this)(token);
         }
         token = this.peek();
-        while(ops.includes(token.type) && min <= handlers[token.type].lbp && token.value != 0) {
+        while(ops.includes(token.type) && min < handlers[token.type].lbp && token.value != 0) {
             token = this.consume();
             left = multiThis(handlers[token.type].led,handlers[token.type],this)(left);
             token = this.peek();
